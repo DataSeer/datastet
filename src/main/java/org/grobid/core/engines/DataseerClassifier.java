@@ -1101,4 +1101,28 @@ public class DataseerClassifier {
         return processTEIString(tei);
     }
 
+    /**
+     * Convert a PDF into TEI and enrich the TEI document with Dataseer information
+     * @return enriched TEI string
+     */
+    public String processGenSharePDF(String filePath) throws Exception {
+        // convert PDF into structured TEI thanks to GROBID0
+
+        List<String> coordinates = new ArrayList<>();
+        coordinates.add("s");
+        coordinates.add("head");
+        // TBD: review arguments, no need for images, annotations, outline
+        GrobidAnalysisConfig config = new GrobidAnalysisConfig.GrobidAnalysisConfigBuilder()
+            .consolidateHeader(0)
+            .consolidateCitations(0)
+            .includeRawCitations(false)
+            .includeRawAffiliations(false)
+            .generateTeiIds(true)
+            .withSentenceSegmentation(true)
+            .generateTeiCoordinates(coordinates)
+            .build();
+        String tei = engine.fullTextToTEI(new File(filePath), config);
+        return processTEIString(tei);
+    }
+
 }

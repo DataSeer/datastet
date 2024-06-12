@@ -173,10 +173,56 @@ public class DatastetProcessFile {
                 LOGGER.error("The input file cannot be written.");
                 throw new DatastetServiceException(
                     "The input file cannot be written. ", Status.INTERNAL_SERVER_ERROR);
-            } 
+            }
 
             // starts conversion process
             retVal = classifier.processPDF(originFile.getAbsolutePath());
+
+            if (!isResultOK(retVal)) {
+                response = Response.status(Response.Status.NO_CONTENT).build();
+            } else {
+                response = Response.status(Response.Status.OK)
+                    .entity(retVal)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_XML + "; charset=UTF-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Methods", "GET, POST, DELETE, PUT")
+                    .build();
+            }
+        } catch (Exception exp) {
+            LOGGER.error("An unexpected exception occurs. ", exp);
+            response = Response.status(Status.INTERNAL_SERVER_ERROR).entity(exp.getMessage()).build();
+        } finally {
+            if (originFile != null)
+                IOUtilities.removeTempFile(originFile);
+        }
+
+        LOGGER.debug(methodLogOut());
+        return response;
+    }
+
+    /**
+     * Uploads a PDF document, extract and structured content with GROBID, convert it into TEI,
+     * identify dataset introductory section, segment and classify sentences.
+     *
+     * @param inputStream the data of origin PDF document
+     * @return a response object which contains an enriched TEI representation of the document
+     */
+    public static Response processGenSharePDF(final InputStream inputStream) {
+        LOGGER.debug(methodLogIn());
+        String retVal = null;
+        Response response = null;
+        File originFile = null;
+        DataseerClassifier classifier = DataseerClassifier.getInstance();
+        try {
+            originFile = IOUtilities.writeInputFile(inputStream);
+            if (originFile == null) {
+                LOGGER.error("The input file cannot be written.");
+                throw new DatastetServiceException(
+                    "The input file cannot be written. ", Status.INTERNAL_SERVER_ERROR);
+            }
+
+            // starts conversion process
+            retVal = classifier.processGenSharePDF(originFile.getAbsolutePath());
 
             if (!isResultOK(retVal)) {
                 response = Response.status(Response.Status.NO_CONTENT).build();

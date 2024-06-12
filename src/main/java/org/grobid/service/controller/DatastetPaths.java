@@ -11,7 +11,7 @@ public interface DatastetPaths {
      * path extension for dataseer service.
      */
     public static final String PATH_DATASEER = "/";
-    
+
     /**
      * path extension for is alive request.
      */
@@ -21,6 +21,11 @@ public interface DatastetPaths {
      * path extension for processing a textual sentence input for dataset mentions.
      */
     public static final String PATH_DATASET_SENTENCE = "annotateDatasetSentence";
+
+    /**
+     * path extension for classifying multiple textual sentence inputs.
+     */
+    public static final String PATH_DATASEER_DATASET_SENTENCE_MULTIPLE = "annotateDataseerDatasetSentenceMultiple";
 
     /**
      * path extension for annotating a PDF file with the dataset-relevant mentions
@@ -48,6 +53,12 @@ public interface DatastetPaths {
      * into TEI via GROBID.
      */
     public static final String PATH_DATASEER_PDF = "processDataseerPDF";
+
+    /**
+     * path extension for processing a PDF file, which will include its conversion
+     * into TEI via GROBID. TEI outout is configured for GenShare needs.
+     */
+    public static final String PATH_GENSHARE_PDF = "processGenSharePDF";
 
     /**
      * path extension for getting the json datatype resource file 

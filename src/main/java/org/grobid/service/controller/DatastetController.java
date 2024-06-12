@@ -15,9 +15,13 @@ import javax.inject.Singleton;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.GenericEntity;
 import java.io.InputStream;
 import java.io.File;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.lang.StringBuilder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -61,8 +65,16 @@ public class DatastetController implements DatastetPaths {
     @Produces(MediaType.APPLICATION_JSON + ";charset=utf-8")
     @POST
     public Response processText_post(@FormParam(TEXT) String text) {
+        System.out.println("processText_post(String) started");
         LOGGER.info(text);
-        return DatastetProcessString.processSentence(text);
+        if (text.length() > 1000) {
+            System.out.println("DataSeer processing sentence: " + text.substring(0, 1000) + "... <truncated>");
+        } else {
+            System.out.println("DataSeer processing sentence: " + text);
+        }
+        Response response = DatastetProcessString.processSentence(text);
+        System.out.println("processText_post(String) finished");
+        return response;
     }
 
     @Path(PATH_DATASEER_SENTENCE)
@@ -81,6 +93,70 @@ public class DatastetController implements DatastetPaths {
         return DatastetProcessString.processDatsetSentence(text);
     }
 
+    @Path(PATH_DATASEER_DATASET_SENTENCE_MULTIPLE)
+    @Produces(MediaType.APPLICATION_JSON + ";charset=utf-8")
+    @POST
+    public Response processDataseerDatasetTextMultipleCombined_post(@FormParam(TEXT) String text) {
+        System.out.println("processDataseerDatasetTextMultipleCombined_post(String) started");
+        String[] splitTexts = text.split("\\\\n");
+        // System.out.println("Split texts: " + splitTexts.length);
+        List<String> dataseerStrings = new ArrayList<>();
+        List<String> datasetStrings = new ArrayList<>();
+        for (String splitText : splitTexts) {
+            if (splitText.length() > 1000) {
+                System.out.println("DataSeer processing split sentence: " + splitText.substring(0, 1000) + "... <truncated>");
+            } else {
+                System.out.println("DataSeer processing split sentence: " + splitText);
+            }
+            Response localResponse = DatastetProcessString.processSentence(splitText);
+            if (localResponse.getStatus() == Response.Status.OK.getStatusCode()) {
+                dataseerStrings.add(localResponse.getEntity().toString());
+            } else {
+                System.out.println("Caught error on DataSeer. Response: " + localResponse);
+                // Break loop and return first error as response
+                return localResponse;
+            }
+        }
+        for (String splitText : splitTexts) {
+            //System.out.println("Dataset processing: " + splitText);
+            Response localResponse = DatastetProcessString.processDatsetSentence(splitText);
+            if (localResponse.getStatus() == Response.Status.OK.getStatusCode()) {
+                datasetStrings.add(localResponse.getEntity().toString());
+            } else {
+                System.out.println("Caught error on dataset. Response: " + localResponse);
+                // Break loop and return first error as response
+                return localResponse;
+            }
+        }
+        StringBuilder result = new StringBuilder();
+        result.append("{ \"dataseer\": [");
+        boolean first = true;
+        for (String string : dataseerStrings) {
+            if (first) {
+                result.append(string);
+                first = false;
+            } else {
+                result.append(",\n");
+                result.append(string);
+            }
+        }
+        result.append(" ], \"datastet\": [");
+        first = true;
+        for (String string : datasetStrings) {
+            if (first) {
+                result.append(string);
+                first = false;
+            } else {
+                result.append(",\n");
+                result.append(string);
+            }
+        }
+        result.append(" ] }");
+
+        System.out.println("processDataseerDatsetTextMultipleCombined_post(String) finished");
+        return Response.status(Response.Status.OK).entity(result.toString()).type(MediaType.TEXT_PLAIN).build();
+    }
+
     @Path(PATH_DATASET_SENTENCE)
     @Produces(MediaType.APPLICATION_JSON + ";charset=utf-8")
     @GET
@@ -95,6 +171,14 @@ public class DatastetController implements DatastetPaths {
     @POST
     public Response processPDF(@FormDataParam(INPUT) InputStream inputStream) {
         return DatastetProcessFile.processPDF(inputStream);
+    }
+
+    @Path(PATH_GENSHARE_PDF)
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_XML)
+    @POST
+    public Response processGenSharePDF(@FormDataParam(INPUT) InputStream inputStream) {
+        return DatastetProcessFile.processGenSharePDF(inputStream);
     }
 
     @Path(PATH_DATASET_PDF)
