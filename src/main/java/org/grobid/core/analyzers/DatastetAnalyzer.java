@@ -1,7 +1,9 @@
 package org.grobid.core.analyzers;
 
+import org.apache.commons.lang3.NotImplementedException;
 import org.grobid.core.layout.LayoutToken;
 import org.grobid.core.lang.Language;
+import org.jruby.exceptions.NotImplementedError;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +23,7 @@ public class DatastetAnalyzer implements org.grobid.core.analyzers.Analyzer {
         if (instance == null) {
             //double check idiom
             // synchronized (instanceController) {
-                if (instance == null)
+//                if (instance == null)
                     getNewInstance();
             // }
         }
@@ -86,6 +88,11 @@ public class DatastetAnalyzer implements org.grobid.core.analyzers.Analyzer {
         }
 
         return result;
+    }
+
+    @Override
+    public List<LayoutToken> retokenizeFromLayoutToken(List<LayoutToken> tokens) {
+        throw new NotImplementedException("This method is not implemented. ");
     }
 
     public List<String> retokenize(List<String> chunks) {
