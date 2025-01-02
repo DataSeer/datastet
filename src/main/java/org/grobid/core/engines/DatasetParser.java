@@ -550,7 +550,11 @@ System.out.println(localDatasetcomponent.toJson());
             String target = urlInfos.getMiddle();
 //            String type = urlInfos.getRight();
 
-            DatasetComponent urlComponent = new DatasetComponent(sequence.getText().substring(pos.start, pos.end));
+            String sequenceText = sequence.getText();
+            if (sequenceText.length() <= pos.start || sequenceText.length() <= pos.end) {
+                continue;
+            }
+            DatasetComponent urlComponent = new DatasetComponent(sequenceText.substring(pos.start, pos.end));
             urlComponent.setOffsetStart(pos.start);
             urlComponent.setOffsetEnd(pos.end);
             if (target != null) {

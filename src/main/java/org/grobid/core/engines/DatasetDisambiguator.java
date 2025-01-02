@@ -1,73 +1,36 @@
 package org.grobid.core.engines;
 
-import nu.xom.Attribute;
-import nu.xom.Element;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpEntity;
 import org.apache.http.client.config.RequestConfig;
-import org.grobid.core.GrobidModels;
-import org.grobid.core.data.DatasetComponent;
-import org.grobid.core.data.Dataset;
-import org.grobid.core.data.BiblioItem;
-import org.grobid.core.document.Document;
-import org.grobid.core.document.DocumentPiece;
-import org.grobid.core.document.DocumentSource;
-import org.grobid.core.document.xml.XmlBuilderUtils;
-import org.grobid.core.engines.config.GrobidAnalysisConfig;
-import org.grobid.core.engines.label.DatasetTaggingLabels;
-import org.grobid.core.engines.label.SegmentationLabels;
-import org.grobid.core.engines.label.TaggingLabel;
-import org.grobid.core.engines.label.TaggingLabels;
-import org.grobid.core.exceptions.GrobidException;
-import org.grobid.core.factory.GrobidFactory;
-import org.grobid.core.features.FeaturesVectorDataseer;
-import org.grobid.core.layout.BoundingBox;
-import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.layout.LayoutTokenization;
-import org.grobid.core.lexicon.DatastetLexicon;
-import org.grobid.core.utilities.DatastetConfiguration;
-import org.grobid.core.utilities.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.xml.sax.InputSource;
-
-import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.node.*;
-import com.fasterxml.jackson.annotation.*;
-import com.fasterxml.jackson.core.io.*;
-
-import java.io.*;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-
-import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.HttpEntity;
-import org.apache.http.util.EntityUtils;
-import org.apache.http.entity.mime.content.StringBody;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.mime.MultipartEntityBuilder;
-import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.conn.HttpHostConnectException;
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.entity.mime.content.StringBody;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.grobid.core.data.Dataset;
+import org.grobid.core.data.DatasetComponent;
+import org.grobid.core.layout.LayoutToken;
+import org.grobid.core.utilities.DatastetConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.apache.commons.lang3.StringUtils.*;
-import static org.grobid.core.document.xml.XmlBuilderUtils.teiElement;
+import java.io.File;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.*;
 
 /**
  * Dataset entity disambiguator. Once dataset mentions are recognized and grouped

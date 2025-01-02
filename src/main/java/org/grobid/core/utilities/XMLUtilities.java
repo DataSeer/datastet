@@ -223,7 +223,7 @@ public class XMLUtilities {
                     for (int j = 0; j < list2.getLength(); j++) {
                         Node node2 = list2.item(j);
                         if (node2.getNodeType() == Node.TEXT_NODE) {
-                            String chunk = node2.getNodeValue();
+                            String chunk = normalize(node2.getNodeValue());
                             buf.append(chunk);
                             found = true;
                             indexPos += chunk.length();
@@ -231,7 +231,7 @@ public class XMLUtilities {
                     }
                 }
             } else if (node.getNodeType() == Node.TEXT_NODE) {
-                String chunk = node.getNodeValue();
+                String chunk = normalize(node.getNodeValue());
                 buf.append(chunk);
                 found = true;
                 indexPos += chunk.length();
