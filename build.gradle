@@ -315,7 +315,11 @@ task installModels(dependsOn: [downloadModelsGit]){
             "context_creation_bert",
             "context_shared_bert",
             "context_used_bert",
-            "datasets-BERT_CRF"
+            "datasets-BERT_CRF",
+            "dataseer",
+            "dataseer-binary_bert",
+            "dataseer-first_bert",
+            "dataseer-reuse_bert"
         ).each { String subDirName ->
             var subDir = new File(sourceDir, subDirName)
             if (subDir.isDirectory()) {
