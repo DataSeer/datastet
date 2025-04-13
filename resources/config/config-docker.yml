@@ -8,7 +8,7 @@ tmpPath: "/opt/grobid/grobid-home/tmp/"
 # path to Pub2TEI repository as available at https://github.com/kermitt2/Pub2TEI
 pub2teiPath: "/opt/Pub2TEI/"
 
-gluttonHost: "https://cloud.science-miner.com/glutton"
+gluttonHost:
 gluttonPort: 
 
 # entity-fishing server information for performing entity disambiguation
@@ -119,6 +119,7 @@ models:
       #embeddings_name: "glove-840B"
       architecture: "bert"
       transformer: "michiyasunaga/LinkBERT-basecased"
+
 
 # Limit the maximum number of requests (0, no limit)
 maxParallelRequests: 0

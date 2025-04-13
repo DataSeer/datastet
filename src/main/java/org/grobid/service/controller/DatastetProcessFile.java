@@ -41,9 +41,6 @@ import java.util.NoSuchElementException;
 @Singleton
 public class DatastetProcessFile {
 
-    /**
-     * The class Logger.
-     */
     private static final Logger LOGGER = LoggerFactory.getLogger(DatastetProcessFile.class);
 
     @Inject
@@ -194,7 +191,7 @@ public class DatastetProcessFile {
      * @return a response object which contains JSON annotation enrichments
      */
     public static Response processDatasetPDF(final InputStream inputStream,
-                                        boolean addParagraphContext) {
+                                        boolean disambiguate) {
         LOGGER.debug(methodLogIn());
         String retVal = null;
         Response response = null;
@@ -203,7 +200,6 @@ public class DatastetProcessFile {
         DatasetParser parser = DatasetParser.getInstance(classifier.getDatastetConfiguration());
         JsonStringEncoder encoder = JsonStringEncoder.getInstance();
 
-        boolean disambiguate = false;
         try {
             ObjectMapper mapper = new ObjectMapper();
 
@@ -221,8 +217,7 @@ public class DatastetProcessFile {
 
             long start = System.currentTimeMillis();
             // starts conversion process
-            Pair<List<List<Dataset>>, Document> extractedResults = 
-                    parser.processPDF(originFile, disambiguate);
+            Pair<List<List<Dataset>>, Document> extractedResults = parser.processPDF(originFile, disambiguate);
             
             StringBuilder json = new StringBuilder();
             json.append("{ ");
@@ -297,17 +292,14 @@ public class DatastetProcessFile {
      * Uploads the origin XML, process it and return the extracted dataset mention objects in JSON.
      *
      * @param inputStream the data of origin XML
-     * @param addParagraphContext if true, the full paragraph where an annotation takes place is added
      * @return a response object containing the JSON annotations
      */
-    public static Response processDatasetJATS(final InputStream inputStream,
-                                        boolean addParagraphContext) {
+    public static Response processDatasetJATS(final InputStream inputStream, Boolean disambiguate) {
         LOGGER.debug(methodLogIn()); 
         Response response = null;
         File originFile = null;
         DataseerClassifier classifier = DataseerClassifier.getInstance();
         DatasetParser parser = DatasetParser.getInstance(classifier.getDatastetConfiguration());
-        JsonStringEncoder encoder = JsonStringEncoder.getInstance();
 
         try {
             ObjectMapper mapper = new ObjectMapper();
@@ -323,7 +315,7 @@ public class DatastetProcessFile {
             } else {
                 long start = System.currentTimeMillis();
 
-                Pair<List<List<Dataset>>, List<BibDataSet>> extractionResult = parser.processXML(originFile, false, false, addParagraphContext);
+                Pair<List<List<Dataset>>, List<BibDataSet>> extractionResult = parser.processXML(originFile, false, disambiguate);
                 long end = System.currentTimeMillis();
 
                 List<List<Dataset>> extractedEntities = null;
@@ -401,19 +393,18 @@ public class DatastetProcessFile {
      *
      * @param inputStream the data of origin TEI
      * @param segmentSentences add sentence segmentation if the TEI was not already segmented
-     * @param addParagraphContext if true, the full paragraph where an annotation takes place is added
      * @return a response object containing the JSON annotations
      */
-    public static Response processDatasetTEI(final InputStream inputStream,
-                                             boolean segmentSentences,
-                                             boolean disambiguate,
-                                             boolean addParagraphContext) {
+    public static Response processDatasetTEI(
+            final InputStream inputStream,
+            boolean segmentSentences,
+            boolean disambiguate
+    ) {
         LOGGER.debug(methodLogIn()); 
         Response response = null;
         File originFile = null;
         DataseerClassifier classifier = DataseerClassifier.getInstance();
         DatasetParser parser = DatasetParser.getInstance(classifier.getDatastetConfiguration());
-        JsonStringEncoder encoder = JsonStringEncoder.getInstance();
 
         try {
             ObjectMapper mapper = new ObjectMapper();
@@ -428,7 +419,7 @@ public class DatastetProcessFile {
                 response = Response.status(Status.INTERNAL_SERVER_ERROR).build();
             } else {
                 long start = System.currentTimeMillis();
-                Pair<List<List<Dataset>>, List<BibDataSet>> extractionResult = parser.processTEI(originFile, segmentSentences, disambiguate, addParagraphContext);
+                Pair<List<List<Dataset>>, List<BibDataSet>> extractionResult = parser.processTEI(originFile, segmentSentences, disambiguate);
                 long end = System.currentTimeMillis();
 
                 List<List<Dataset>> extractedEntities = null;
@@ -477,11 +468,6 @@ public class DatastetProcessFile {
                     response = Response.status(Status.NO_CONTENT).build();
                 } else {
                     response = Response.status(Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
-                    /*response = Response
-                            .ok()
-                            .type("application/json")
-                            .entity(retValString)
-                            .build();*/
                 }
             }
 
@@ -519,9 +505,5 @@ public class DatastetProcessFile {
      */
     public static boolean isResultOK(String result) {
         return StringUtils.isBlank(result) ? false : true;
-    }
-
-    public static Response processDatasetTEI(InputStream inputStream, boolean segmentSentences, boolean addParagraphContextBoolean) {
-        return processDatasetTEI(inputStream, segmentSentences, false, addParagraphContextBoolean);
     }
 }

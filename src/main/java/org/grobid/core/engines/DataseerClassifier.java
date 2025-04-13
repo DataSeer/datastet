@@ -412,7 +412,7 @@ public class DataseerClassifier {
             tei = processTEIDocument(document, segmentSentences);
         } catch(ParserConfigurationException | IOException e) {
             e.printStackTrace();
-        } 
+        }
         return tei;
     }
     
@@ -439,7 +439,7 @@ public class DataseerClassifier {
 
         } catch(ParserConfigurationException | IOException e) {
             e.printStackTrace();
-        } 
+        }
         return tei;
     }
 

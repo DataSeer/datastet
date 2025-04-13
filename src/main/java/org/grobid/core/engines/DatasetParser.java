@@ -596,7 +596,7 @@ System.out.println(localDatasetcomponent.toJson());
     }
 
     private List<DataseerResults> classifyWithDataseerClassifier(List<String> allSentences) {
-        // pre-process classification of every sentences in batch
+        // pre-process classification of every sentence in batch
         if (this.dataseerClassifier == null)
             dataseerClassifier = DataseerClassifier.getInstance();
 
@@ -633,8 +633,8 @@ System.out.println(localDatasetcomponent.toJson());
                                 String localSentence = classificationNode.get("text").textValue();
                                 // the following should never happen
                                 if (!localSentence.equals(allSentences.get(totalClassificationNodes))) {
-                                    System.out.println("sentence, got: " + localSentence);
-                                    System.out.println("\texpecting: " + allSentences.get(totalClassificationNodes));
+                                    LOGGER.warn("sentence, got: " + localSentence);
+                                    LOGGER.warn("\texpecting: " + allSentences.get(totalClassificationNodes));
                                 }
                             } else if (!field.equals("no_dataset")) {
                                 scoresPerDatatypes.put(field, classificationNode.get(field).doubleValue());
@@ -662,7 +662,7 @@ System.out.println(localDatasetcomponent.toJson());
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.error("General exception occurred during the classification with the DataSeer classifier", e);
         }
 
         return results;
@@ -1469,7 +1469,7 @@ for(String sentence : allSentences) {
         return entities;
     }
 
-    public Pair<List<List<Dataset>>, List<BibDataSet>> processXML(File file, boolean segmentSentences, boolean disambiguate, boolean addParagraphContext) throws IOException {
+    public Pair<List<List<Dataset>>, List<BibDataSet>> processXML(File file, boolean segmentSentences, boolean disambiguate) throws IOException {
         Pair<List<List<Dataset>>, List<BibDataSet>> resultExtraction = null;
         try {
             String tei = processXML(file);
@@ -1484,7 +1484,7 @@ for(String sentence : allSentences) {
             // TODO: call pub2TEI with sentence segmentation
 
             // It's likely that JATS don't have sentences
-            resultExtraction = processTEIDocument(document, disambiguate, addParagraphContext);
+            resultExtraction = processTEIDocument(document, disambiguate);
         } catch (final Exception exp) {
             LOGGER.error("An error occured while processing the following XML file: "
                     + file.getPath(), exp);
@@ -1492,7 +1492,7 @@ for(String sentence : allSentences) {
         return resultExtraction;
     }
 
-    public Pair<List<List<Dataset>>, List<BibDataSet>> processTEI(File file, boolean segmentSentences, boolean disambiguate, boolean addParagraphContext) throws IOException {
+    public Pair<List<List<Dataset>>, List<BibDataSet>> processTEI(File file, boolean segmentSentences, boolean disambiguate) throws IOException {
         Pair<List<List<Dataset>>, List<BibDataSet>> resultExtraction = null;
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -1502,7 +1502,7 @@ for(String sentence : allSentences) {
             org.w3c.dom.Element root = document.getDocumentElement();
             if (segmentSentences)
                 segment(document, root);
-            resultExtraction = processTEIDocument(document, disambiguate, addParagraphContext);
+            resultExtraction = processTEIDocument(document, disambiguate);
             //tei = restoreDomParserAttributeBug(tei); 
 
         } catch (final Exception exp) {
@@ -1533,7 +1533,6 @@ for(String sentence : allSentences) {
 
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
             tei = FileUtils.readFileToString(new File(newFilePath), UTF_8);
 
         } catch (final Exception exp) {
@@ -1554,8 +1553,7 @@ for(String sentence : allSentences) {
      */
     public Pair<List<List<Dataset>>, List<BibDataSet>> processTEIDocument(String documentAsString,
                                                                           boolean segmentSentences,
-                                                                          boolean disambiguate,
-                                                                          boolean addParagraphContext) {
+                                                                          boolean disambiguate) {
 
         Pair<List<List<Dataset>>, List<BibDataSet>> tei = null;
         try {
@@ -1568,12 +1566,8 @@ for(String sentence : allSentences) {
             if (segmentSentences)
                 segment(document, root);
 
-            tei = processTEIDocument(document, disambiguate, addParagraphContext);
-        } catch (ParserConfigurationException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (SAXException e) {
+            tei = processTEIDocument(document, disambiguate);
+        } catch (ParserConfigurationException | IOException | SAXException e) {
             e.printStackTrace();
         }
         return tei;
@@ -1586,8 +1580,7 @@ for(String sentence : allSentences) {
      * LF: This method attempt to reproduce the extraction from PDF in processPDF but with an already extracted TEI as input
      */
     public Pair<List<List<Dataset>>, List<BibDataSet>> processTEIDocument(org.w3c.dom.Document doc,
-                                                                          boolean disambiguate,
-                                                                          boolean addParagraphContext) {
+                                                                          boolean disambiguate) {
 
         List<DatasetDocumentSequence> selectedSequences = new ArrayList<>();
 
@@ -2017,8 +2010,9 @@ for(String sentence : allSentences) {
                     biblioRefMap.put(refTextClean, biblioItem);
 
                     Integer refKey = biblioComponentWrapper.getRefKey(target);
-
-                    BiblioComponent biblioComponent = new BiblioComponent(biblioItem, refKey);
+                    BiblioComponent biblioComponent = new BiblioComponent(
+                            biblioItem, refKey
+                    );
                     biblioComponent.setRawForm(refText);
                     biblioComponent.setOffsetStart(position.start);
                     biblioComponent.setOffsetEnd(position.end);
@@ -2116,6 +2110,7 @@ for(String sentence : allSentences) {
         for (int i = 0; i < selectedSequences.size(); i++) {
 
             DatasetDocumentSequence selectedSequence = selectedSequences.get(i);
+            // With TEI there is no sentence offset
             List<Dataset> localEntities = propagateLayoutTokenSequence(
                     selectedSequence,
                     entities.get(i),
@@ -2589,11 +2584,13 @@ for(String sentence : allSentences) {
                 String term = nameComponent.getRawForm();
                 term = term.replace("\n", " ");
                 term = term.replaceAll("( )+", " ");
+                term = term.replaceAll("^\"", " ");
+                term = term.replaceAll("\"$", " ");
 
-                if (term.trim().length() == 0)
+                if (StringUtils.isBlank(term))
                     continue;
 
-                // for safety, we don't propagate something that looks like a stopword with simply an Uppercase first letter
+                // for safety, we don't propagate something that looks like a stop word with simply an Uppercase first letter
                 if (FeatureFactory.getInstance().test_first_capital(term) &&
                         !FeatureFactory.getInstance().test_all_capital(term) &&
                         DatastetLexicon.getInstance().isEnglishStopword(term.toLowerCase())) {
@@ -2620,14 +2617,14 @@ for(String sentence : allSentences) {
                     added.add(termCleaned);
                 }
 
-                // add common trivial variant singular/plurial
-                if (term.endsWith("dataset") || term.endsWith("Dataset")) {
+                // add common trivial variant singular/plural
+                if (StringUtils.endsWithIgnoreCase(term, "dataset")) {
                     String termAlt = term + "s";
                     if (!added.contains(termAlt)) {
                         termPattern.loadTerm(termAlt, DatastetAnalyzer.getInstance(), false);
                         added.add(termAlt);
                     }
-                } else if (term.endsWith("datasets") || term.endsWith("Datasets")) {
+                } else if (StringUtils.endsWithIgnoreCase(term, "datasets")) {
                     String termAlt = term.substring(0, term.length() - 1);
                     if (!added.contains(termAlt)) {
                         termPattern.loadTerm(termAlt, DatastetAnalyzer.getInstance(), false);
@@ -2647,7 +2644,7 @@ for(String sentence : allSentences) {
     }
 
     public Map<String, Integer> prepareFrequencies(List<List<Dataset>> entities, List<LayoutToken> tokens) {
-        Map<String, Integer> frequencies = new TreeMap<String, Integer>();
+        Map<String, Integer> frequencies = new TreeMap<>();
         for (List<Dataset> datasets : entities) {
             if (CollectionUtils.isEmpty(datasets)) {
                 continue;
@@ -2661,12 +2658,12 @@ for(String sentence : allSentences) {
                     FastMatcher localTermPattern = new FastMatcher();
                     localTermPattern.loadTerm(term, DatastetAnalyzer.getInstance());
                     List<OffsetPosition> results = localTermPattern.matchLayoutToken(tokens, true, true);
-                    // ignore delimiters, but case sensitive matching
+                    // ignore delimiters, but case-sensitive matching
                     int freq = 0;
                     if (results != null) {
                         freq = results.size();
                     }
-                    frequencies.put(term, Integer.valueOf(freq));
+                    frequencies.put(term, freq);
                 }
             }
         }
