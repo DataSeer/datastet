@@ -35,8 +35,8 @@ public class DatastetServiceUtils {
 
         sb.append("\"application\": \"datastet\", ");
         if (version !=null)
-            sb.append("\"version\": \"" + version + "\", ");
-        sb.append("\"date\": \"" + dateISOString + "\"");
+            sb.append("\"version\": \"").append(version).append("\", ");
+        sb.append("\"date\": \"").append(dateISOString).append("\"");
 
         return sb.toString();
     }
@@ -45,11 +45,7 @@ public class DatastetServiceUtils {
      * Convert REST boolean parameter value provided as string
      */
     public static boolean validateBooleanRawParam(String raw) {
-        boolean result = false;
-        if ((raw != null) && (raw.equals("1") || raw.toLowerCase().equals("true"))) {
-            result = true;
-        }
-        return result;
+        return (raw != null) && (raw.equals("1") || raw.equalsIgnoreCase("true"));
     }
 
     /**

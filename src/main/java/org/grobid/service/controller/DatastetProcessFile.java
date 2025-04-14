@@ -504,6 +504,6 @@ public class DatastetProcessFile {
      * Check whether the result is null or empty.
      */
     public static boolean isResultOK(String result) {
-        return StringUtils.isBlank(result) ? false : true;
+        return !StringUtils.isBlank(result);
     }
 }

@@ -1165,7 +1165,7 @@ System.out.println(localDatasetcomponent.toJson());
             //System.out.println("allSentences size: " + allSentences.size());
             //System.out.println("sentenceOffsetStarts size: " + sentenceOffsetStarts.size());
 
-            // pre-process labeling of every sentences in batch
+            // pre-process labeling of every sentence in batch
             processLayoutTokenSequences(allDatasetDocumentSequences, entities, sentenceOffsetStarts, pdfAnnotations, disambiguate);
 
             //System.out.println("entities size: " + entities.size());

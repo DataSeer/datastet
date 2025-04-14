@@ -137,7 +137,7 @@ public class DataseerClassifier {
     public String classifyBinary(String text) throws Exception {
         if (StringUtils.isEmpty(text))
             return null;
-        List<String> texts = new ArrayList<String>();
+        List<String> texts = new ArrayList<>();
         texts.add(text);
         return classifyBinary(texts);
     }
@@ -149,7 +149,7 @@ public class DataseerClassifier {
     public String classifyFirstLevel(String text) throws Exception {
         if (StringUtils.isEmpty(text))
             return null;
-        List<String> texts = new ArrayList<String>();
+        List<String> texts = new ArrayList<>();
         texts.add(text);
         return classifyFirstLevel(texts);
     }
@@ -406,7 +406,7 @@ public class DataseerClassifier {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();           
+            DocumentBuilder builder = factory.newDocumentBuilder();
             org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(xmlString)));
             //document.getDocumentElement().normalize();
             tei = processTEIDocument(document, segmentSentences);
@@ -434,8 +434,9 @@ public class DataseerClassifier {
             org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(tei)));
             //document.getDocumentElement().normalize();
             tei = processTEIDocument(document, segmentSentences);
-            if (avoidDomParserBug)
-                tei = restoreDomParserAttributeBug(tei); 
+            if (avoidDomParserBug) {
+                tei = restoreDomParserAttributeBug(tei);
+            }
 
         } catch(ParserConfigurationException | IOException e) {
             e.printStackTrace();
@@ -450,8 +451,9 @@ public class DataseerClassifier {
     public String processTEIDocument(org.w3c.dom.Document document, boolean segmentSentences) throws Exception {
         String tei = null;
         Element root = document.getDocumentElement();
-        if (segmentSentences)
+        if (segmentSentences) {
             segment(document, root);
+        }
         // augment sentences with dataseer classification information
         enrich(document, root);
         tei = serialize(document, null);
