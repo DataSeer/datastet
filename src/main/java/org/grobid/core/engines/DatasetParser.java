@@ -2004,7 +2004,7 @@ for(String sentence : allSentences) {
 
                 Pair<String, org.w3c.dom.Node> referenceInformation = referenceMap.get(biblioComponentWrapper.getRefKey(target));
                 if (referenceInformation != null) {
-                    BiblioItem biblioItem = XMLUtilities.parseTEIBiblioItem((org.w3c.dom.Element) referenceInformation.getRight());
+                    BiblioItem biblioItem = XMLUtilities.parseTEIBiblioItem(doc, (org.w3c.dom.Element) referenceInformation.getRight());
                     String refTextClean = refText.replaceAll("[\\[\\], ]+", "");
 
                     biblioRefMap.put(refTextClean, biblioItem);
@@ -2074,7 +2074,7 @@ for(String sentence : allSentences) {
 
 
         // TODO make sure that selectedSequences == allSentences above in the processPDF?
-        List<String> allSentences = selectedSequences.stream().map(DatasetDocumentSequence::getText).toList();
+        List<String> allSentences = selectedSequences.stream().map(DatasetDocumentSequence::getText).collect(Collectors.toList());
         List<DataseerResults> dataseerClassificationResults = classifyWithDataseerClassifier(allSentences);
 
         for (int i = 0; i < entities.size(); i++) {

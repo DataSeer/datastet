@@ -114,13 +114,13 @@ public class XMLUtilities {
         return found ? buf.toString() : null;
     }
 
-    public static BiblioItem parseTEIBiblioItem(org.w3c.dom.Element biblStructElement) {
+    public static BiblioItem parseTEIBiblioItem(org.w3c.dom.Document doc, org.w3c.dom.Element biblStructElement) {
         BiblStructSaxHandler handler = new BiblStructSaxHandler();
         String teiXML = null;
         try {
             SAXParserFactory spf = SAXParserFactory.newInstance();
             SAXParser p = spf.newSAXParser();
-            teiXML = serialize(null, biblStructElement);
+            teiXML = serialize(doc, biblStructElement);
             p.parse(new InputSource(new StringReader(teiXML)), handler);
         } catch(Exception e) {
             if (teiXML != null)
@@ -271,7 +271,7 @@ public class XMLUtilities {
             XPathExpression xpathExp = xpathFactory.newXPath().compile(
                     "//text()[normalize-space(.) = '']");
             NodeList emptyTextNodes = (NodeList)
-                    xpathExp.evaluate(doc, XPathConstants.NODESET);
+                    xpathExp.evaluate(node, XPathConstants.NODESET);
 
             // Remove each empty text node from document.
             for (int i = 0; i < emptyTextNodes.getLength(); i++) {
@@ -470,7 +470,7 @@ public class XMLUtilities {
                  (textualElements.contains(n.getNodeName())) ) {
                 // text content
                 //String text = n.getTextContent();
-                StringBuffer textBuffer = new StringBuffer();
+                StringBuilder textBuffer = new StringBuilder();
                 NodeList childNodes = n.getChildNodes();
                 for(int y=0; y<childNodes.getLength(); y++) {
                     textBuffer.append(serialize(doc, childNodes.item(y)));
