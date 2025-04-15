@@ -1,5 +1,7 @@
 package org.grobid.core.engines;
 
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import org.grobid.core.GrobidModels;
 import org.grobid.core.analyzers.DatastetAnalyzer;
 import org.grobid.core.engines.tagging.GrobidCRFEngine;
@@ -23,6 +25,7 @@ import static org.apache.commons.lang3.StringUtils.trim;
  *
  * @author Patrice
  */
+@Singleton
 public class DataseerParser extends AbstractParser {
     private static final Logger logger = LoggerFactory.getLogger(DataseerParser.class);
 
@@ -33,38 +36,35 @@ public class DataseerParser extends AbstractParser {
 
     public static DataseerParser getInstance() {
         if (instance == null) {
-            getNewInstance();
+            synchronized (DataseerParser.class) {
+                if (instance == null) {
+                    instance = new DataseerParser();
+                }
+            }
         }
         return instance;
     }
 
-    /**
-     * Create a new instance.
-     */
-    private static synchronized void getNewInstance() {
-        instance = new DataseerParser();
-    }
-
     private EngineParsers parsers;
 
+    @Inject
     private DataseerParser() {
-        super(GrobidModels.DATASEER, CntManagerFactory.getCntManager(), 
-            GrobidCRFEngine.valueOf("WAPITI"));
+        super(GrobidModels.DATASEER, CntManagerFactory.getCntManager(),
+                GrobidCRFEngine.valueOf("WAPITI"));
 
         parsers = new EngineParsers();
     }
 
     /**
-     * Sequence labelling of a text segments for identifying pieces corresponding to 
-     * section introducing data sets (e.g. Materials and Methods section). 
+     * Sequence labelling of a text segments for identifying pieces corresponding to
+     * section introducing data sets (e.g. Materials and Methods section).
      *
-     * @param segments the list of textual segments, segmented into LayoutTokens
+     * @param segments     the list of textual segments, segmented into LayoutTokens
      * @param sectionTypes list giving for each segment its section type as String (head, paragraph, list)
-     * @param nbDatasets list giving for each segment if the number of datasets predicted by the classifier 
+     * @param nbDatasets   list giving for each segment if the number of datasets predicted by the classifier
      * @param datasetTypes list giving for each segment the classifier prediction as data type as String, or null if no dataset
-     * 
      * @return list of Boolean, one for each inputed text segment, indicating if the segment
-     * is relevant for data set section. 
+     * is relevant for data set section.
      */
     public List<Boolean> processing(List<List<LayoutToken>> segments, List<String> sectionTypes, List<Integer> nbDatasets, List<String> datasetTypes) {
         String content = getFeatureVectorsAsString(segments, sectionTypes, nbDatasets, datasetTypes);
@@ -74,30 +74,30 @@ public class DataseerParser extends AbstractParser {
             // set the boolean value for the segments
             String[] lines = labelledResult.split("\n");
             int indexMatMetSection = -1;
-            for(int i=0; i < lines.length; i++) {
+            for (int i = 0; i < lines.length; i++) {
                 String line = lines[i];
                 String values[] = line.split("\t");
                 if (values.length <= 1)
                     values = line.split(" ");
-                String label = values[values.length-1];
-                if (label.endsWith("no_dataset")) 
+                String label = values[values.length - 1];
+                if (label.endsWith("no_dataset"))
                     result.add(Boolean.valueOf(false));
-                else 
+                else
                     result.add(Boolean.valueOf(true));
 
-                if (indexMatMetSection == -1 && values[values.length-2].equals("1")) {
+                if (indexMatMetSection == -1 && values[values.length - 2].equals("1")) {
                     indexMatMetSection = i;
                 }
             }
-    
+
             if (indexMatMetSection == -1) {
                 // we relax the constrain for matching any "method" section (match of "method" in the start of header titles)
-                for(int i=0; i < lines.length; i++) {
+                for (int i = 0; i < lines.length; i++) {
                     String line = lines[i].toLowerCase();
-                    if (line.indexOf("method") != -1 || 
-                        (line.indexOf("data") != -1 &&  
-                        (line.indexOf("description") != -1 || 
-                         line.indexOf("experiment") != -1))) {
+                    if (line.indexOf("method") != -1 ||
+                            (line.indexOf("data") != -1 &&
+                                    (line.indexOf("description") != -1 ||
+                                            line.indexOf("experiment") != -1))) {
                         indexMatMetSection = i;
                         break;
                     }
@@ -109,7 +109,7 @@ public class DataseerParser extends AbstractParser {
                 // (ideally these sections should be catched by the sequence labeling model, but 
                 // due to the current lack of training data, it's not the case)
                 int nb_new_section = 0;
-                for(int j=indexMatMetSection; j < lines.length; j++) {
+                for (int j = indexMatMetSection; j < lines.length; j++) {
                     // set the section to true
                     String line = lines[j].toLowerCase();
                     result.set(j, Boolean.valueOf(true));
@@ -126,10 +126,10 @@ public class DataseerParser extends AbstractParser {
                     if (nb_new_section > 2)
                         break;
 
-                    if (j>indexMatMetSection+10) 
+                    if (j > indexMatMetSection + 10)
                         break;
 
-                    if (line.indexOf("acknowledgement") != -1 || line.indexOf("funding") != -1 || line.indexOf("conclusion") != -1)  {
+                    if (line.indexOf("acknowledgement") != -1 || line.indexOf("funding") != -1 || line.indexOf("conclusion") != -1) {
                         result.set(j, Boolean.valueOf(false));
                         break;
                     }
@@ -140,24 +140,24 @@ public class DataseerParser extends AbstractParser {
             // check if we have an explicit "materials and methods"-type section 
             if (indexMatMetSection != -1) {
                 // if yes, check the number of datasets in the explicit "materials and methods"-type section
-                for(int i=indexMatMetSection; i < lines.length; i++) {
+                for (int i = indexMatMetSection; i < lines.length; i++) {
                     String line = lines[i];
                     String values[] = line.split("\t");
                     if (values.length <= 1)
                         values = line.split(" ");
 
-                    String nbDatasetString = values[values.length-6];
+                    String nbDatasetString = values[values.length - 6];
                     int nbDataset = 0;
                     try {
                         nbDataset = Integer.parseInt(nbDatasetString);
-                    } catch(Exception e) {
+                    } catch (Exception e) {
                         logger.warn("Expected integer value for nb dataset: " + nbDatasetString);
                     }
 
                     // if the nb of datasets is large enough, we neutralize the dataset outside this section
                     if (nbDataset > 2) {
-                        for(int j=0; j<result.size(); j++) {
-                            if (j<indexMatMetSection || j>indexMatMetSection+10)
+                        for (int j = 0; j < result.size(); j++) {
+                            if (j < indexMatMetSection || j > indexMatMetSection + 10)
                                 result.set(j, Boolean.valueOf(false));
                         }
                     }
@@ -170,7 +170,7 @@ public class DataseerParser extends AbstractParser {
 
     public List<Boolean> processingText(List<String> segments, List<String> sectionTypes, List<Integer> nbDatasets, List<String> datasetTypes) {
         List<List<LayoutToken>> layoutTokenSegments = new ArrayList<List<LayoutToken>>();
-        for(String segment : segments) {
+        for (String segment : segments) {
             List<LayoutToken> tokens = DatastetAnalyzer.getInstance().tokenizeWithLayoutToken(segment);
             layoutTokenSegments.add(tokens);
         }
@@ -186,10 +186,10 @@ public class DataseerParser extends AbstractParser {
      * Possible dictionary flags are at line level (i.e. the line contains a name mention, a place mention, a year, etc.)
      * No layout features, because they have already been taken into account at the segmentation model level.
      */
-    public static String getFeatureVectorsAsString(List<List<LayoutToken>> segments, 
-                                            List<String> sectionTypes,  
-                                            List<Integer> nbDatasets, 
-                                            List<String> datasetTypes) {
+    public static String getFeatureVectorsAsString(List<List<LayoutToken>> segments,
+                                                   List<String> sectionTypes,
+                                                   List<Integer> nbDatasets,
+                                                   List<String> datasetTypes) {
         // vector for features
         FeaturesVectorDataseer features;
         FeaturesVectorDataseer previousFeatures = null;
@@ -197,27 +197,27 @@ public class DataseerParser extends AbstractParser {
         StringBuilder fulltext = new StringBuilder();
 
         int maxLineLength = 0;
-        for(List<LayoutToken> segment : segments) {
+        for (List<LayoutToken> segment : segments) {
             if (segments.size() > maxLineLength)
                 maxLineLength = segments.size();
         }
 
         int m = 0;
-        for(List<LayoutToken> segment : segments) {
+        for (List<LayoutToken> segment : segments) {
             if (segment == null || segment.size() == 0) {
                 m++;
                 continue;
             }
             int n = 0;
-            LayoutToken token = segment.get(n); 
-            while(DatastetAnalyzer.DELIMITERS.indexOf(token.getText()) != -1 && n < segment.size()) {
-                token = segment.get(n); 
+            LayoutToken token = segment.get(n);
+            while (DatastetAnalyzer.DELIMITERS.indexOf(token.getText()) != -1 && n < segment.size()) {
+                token = segment.get(n);
                 n++;
             }
             // sanitisation and filtering
             String tokenText = token.getText().trim();
-            if ( (tokenText.length() == 0) ||
-                (TextUtilities.filterLine(tokenText))) {
+            if ((tokenText.length() == 0) ||
+                    (TextUtilities.filterLine(tokenText))) {
                 m++;
                 continue;
             }
@@ -226,29 +226,29 @@ public class DataseerParser extends AbstractParser {
 
             n++;
             if (n < segment.size())
-                token = segment.get(n); 
-            while(DatastetAnalyzer.DELIMITERS.indexOf(token.getText()) != -1 && n < segment.size()) {
-                token = segment.get(n); 
+                token = segment.get(n);
+            while (DatastetAnalyzer.DELIMITERS.indexOf(token.getText()) != -1 && n < segment.size()) {
+                token = segment.get(n);
                 n++;
             }
             // sanitisation and filtering
             tokenText = token.getText().trim();
-            if ( (tokenText.length() > 0) &&
-                (!TextUtilities.filterLine(tokenText))) {
+            if ((tokenText.length() > 0) &&
+                    (!TextUtilities.filterLine(tokenText))) {
                 features.secondString = tokenText;
             }
 
             n++;
             if (n < segment.size())
-                token = segment.get(n); 
-            while(DatastetAnalyzer.DELIMITERS.indexOf(token.getText()) != -1 && n < segment.size()) {
-                token = segment.get(n); 
+                token = segment.get(n);
+            while (DatastetAnalyzer.DELIMITERS.indexOf(token.getText()) != -1 && n < segment.size()) {
+                token = segment.get(n);
                 n++;
             }
             // sanitisation and filtering
             tokenText = token.getText().trim();
-            if ( (tokenText.length() > 0) &&
-                (!TextUtilities.filterLine(tokenText))) {
+            if ((tokenText.length() > 0) &&
+                    (!TextUtilities.filterLine(tokenText))) {
                 features.thirdString = tokenText;
             }
 
@@ -257,7 +257,7 @@ public class DataseerParser extends AbstractParser {
             Integer nbDataset = nbDatasets.get(m);
             if (nbDataset == 0)
                 features.has_dataset = false;
-            else 
+            else
                 features.has_dataset = true;
             if (nbDataset <= 4)
                 features.nbDataset = nbDataset;
@@ -265,7 +265,7 @@ public class DataseerParser extends AbstractParser {
                 features.nbDataset = 4;
 
             features.datasetType = datasetTypes.get(m);
-            
+
             //features.punctuationProfile = TextUtilities.punctuationProfile(line);
 
             //if (features.digit == null)
@@ -285,7 +285,7 @@ public class DataseerParser extends AbstractParser {
             previousFeatures = features;
             m++;
         }
-        
+
         if (previousFeatures != null)
             fulltext.append(previousFeatures.printVector());
 
@@ -293,5 +293,4 @@ public class DataseerParser extends AbstractParser {
     }
 
 
- 
 }

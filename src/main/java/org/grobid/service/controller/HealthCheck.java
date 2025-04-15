@@ -1,15 +1,14 @@
 package org.grobid.service.controller;
 
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Response;
 import org.grobid.service.configuration.DatastetServiceConfiguration;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Response;
-
-import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 
 @Path("health")
 @Singleton
@@ -20,7 +19,8 @@ public class HealthCheck extends com.codahale.metrics.health.HealthCheck {
     private DatastetServiceConfiguration configuration;
 
     @Inject
-    public HealthCheck() {
+    public HealthCheck(DatastetServiceConfiguration configuration) {
+        this.configuration = configuration;
     }
 
     @GET

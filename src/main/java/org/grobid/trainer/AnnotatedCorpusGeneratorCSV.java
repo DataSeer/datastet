@@ -1,55 +1,39 @@
 package org.grobid.trainer;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import nu.xom.*;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVPrinter;
+import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.io.FileUtils;
+import org.grobid.core.data.annotation.AnnotatedDocument;
+import org.grobid.core.data.annotation.DataseerAnnotation;
 import org.grobid.core.engines.DataseerClassifier;
-import org.grobid.core.exceptions.GrobidException;
+import org.grobid.core.engines.Engine;
+import org.grobid.core.engines.config.GrobidAnalysisConfig;
+import org.grobid.core.factory.GrobidFactory;
 import org.grobid.core.utilities.ArticleUtilities;
 import org.grobid.core.utilities.ArticleUtilities.Source;
-
-import org.grobid.core.analyzers.GrobidAnalyzer;
-import org.grobid.core.data.BibDataSet;
-import org.grobid.core.data.BiblioItem;
-import org.grobid.core.document.Document;
-import org.grobid.core.document.DocumentPiece;
-import org.grobid.core.document.DocumentSource;
-import org.grobid.core.document.xml.XmlBuilderUtils;
-import org.grobid.core.engines.Engine;
-import org.grobid.core.engines.FullTextParser;
-import org.grobid.core.engines.config.GrobidAnalysisConfig;
-import org.grobid.core.engines.label.SegmentationLabels;
-import org.grobid.core.engines.label.TaggingLabel;
-import org.grobid.core.engines.label.TaggingLabels;
-import org.grobid.core.factory.GrobidFactory;
-import org.grobid.core.lang.Language;
-import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.layout.LayoutTokenization;
-import org.grobid.core.lexicon.FastMatcher;
-import org.grobid.core.utilities.*;
-
+import org.grobid.core.utilities.XMLUtilities;
+import org.grobid.service.configuration.DatastetServiceConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
 import java.io.*;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.text.NumberFormat;
-
-import org.apache.commons.io.*;
-import org.apache.commons.csv.*;
-import org.apache.commons.lang3.tuple.Pair;
-
-import java.net.URI;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.concurrent.*;
-import java.util.function.*;
-
-import nu.xom.*;
-import static org.grobid.core.document.xml.XmlBuilderUtils.teiElement;
-import org.apache.commons.lang3.StringUtils;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /*import javax.xml.parsers.*;
 import javax.xml.transform.*;
@@ -59,28 +43,24 @@ import javax.xml.namespace.NamespaceContext;
 import javax.xml.xpath.*;
 import org.w3c.dom.*;*/
 
-import java.io.*;
-
-import com.fasterxml.jackson.core.io.JsonStringEncoder;
-
 /**
- * This class aims at converting annotations in .csv format from the original 
- * dataseer dataset into annotated XML files (at document level) usable for training 
- * text mining tools and readable by humans. 
- *
+ * This class aims at converting annotations in .csv format from the original
+ * dataseer dataset into annotated XML files (at document level) usable for training
+ * text mining tools and readable by humans.
+ * <p>
  * We need in particular to re-align the content of the original document which
  * has been annotated (e.g. a PMC article) with the "quotes" and strings available
- * in the .csv stuff. This is not always straightforward because: 
- * 
- * - the strings in the csv files has been cut and paste directly from the PDF 
- *   document, which is more noisy than what we can get from GROBID PDF parsing 
- *   pipeline,
- * - some annotations refers to  unlocated information present in the document and 
- *   we need some global document analysis to try to related the annotations with 
- *   the right document content.
- *
+ * in the .csv stuff. This is not always straightforward because:
+ * <p>
+ * - the strings in the csv files has been cut and paste directly from the PDF
+ * document, which is more noisy than what we can get from GROBID PDF parsing
+ * pipeline,
+ * - some annotations refers to  unlocated information present in the document and
+ * we need some global document analysis to try to related the annotations with
+ * the right document content.
+ * <p>
  * Example command line:
- * ./gradlew annotated_corpus_generator_csv -Pfull=/mnt/data/resources/plos/0/tei/ 
+ * ./gradlew annotated_corpus_generator_csv -Pfull=/mnt/data/resources/plos/0/tei/
  * -Ppdf=/mnt/data/resources/plos/pdf/ -Pcsv=resources/dataset/dataseer/csv/ -Pxml=resources/dataset/dataseer/corpus/
  *
  * @author Patrice
@@ -88,26 +68,32 @@ import com.fasterxml.jackson.core.io.JsonStringEncoder;
 public class AnnotatedCorpusGeneratorCSV {
 
     private static final Logger logger = LoggerFactory.getLogger(AnnotatedCorpusGeneratorCSV.class);
+    private final DatastetServiceConfiguration configuration;
 
-    private ArticleUtilities articleUtilities = new ArticleUtilities();
+    private ArticleUtilities articleUtilities;
+
+    public AnnotatedCorpusGeneratorCSV(DatastetServiceConfiguration configuration) {
+        this.configuration = configuration;
+        articleUtilities = new ArticleUtilities(this.configuration);
+    }
 
     /**
      * Start the conversion/fusion process for generating MUC-style annotated XML documents
-     * from PDF, parsed by GROBID core, and dataseer dataset  
+     * from PDF, parsed by GROBID core, and dataseer dataset
      */
     public void processXML(String documentPath, String csvPath, String xmlPath) throws IOException {
 
-        Map<String, AnnotatedDocument> documents = new HashMap<String, AnnotatedDocument>();
-        Map<String, DataseerAnnotation> annotations = new HashMap<String, DataseerAnnotation>();
+        Map<String, AnnotatedDocument> documents = new HashMap<>();
+        Map<String, DataseerAnnotation> annotations = new HashMap<>();
 
         importCSVFiles(csvPath, documents, annotations);
 
         System.out.println("\n" + annotations.size() + " total annotations");
-        System.out.println(documents.size() + " total annotated documents");  
+        System.out.println(documents.size() + " total annotated documents");
         if (!documentPath.endsWith("/"))
             documentPath += "/";
 
-        DataseerClassifier dataseer = DataseerClassifier.getInstance();
+        DataseerClassifier dataseer = DataseerClassifier.getInstance(this.configuration.getDatastetConfiguration());
 
         // some counters
         int totalAnnotations = 0;
@@ -154,7 +140,7 @@ public class AnnotatedCorpusGeneratorCSV {
             int ind1 = doi.indexOf("journal");
             String fileName = doi.substring(ind1);
             int ind2 = fileName.lastIndexOf(".");
-            String plosPath = documentPath + fileName + ".xml"; 
+            String plosPath = documentPath + fileName + ".xml";
 
             System.out.println(plosPath);
             // get the XML full text if available, otherwise PDF
@@ -195,7 +181,7 @@ public class AnnotatedCorpusGeneratorCSV {
                     // match sentence and inject attributes to sentence tags
                     boolean hasMatched = false;
                     int k = 0;
-                    for(DataseerAnnotation annotation : doc.getAnnotations()) {
+                    for (DataseerAnnotation annotation : doc.getAnnotations()) {
                         if (!solvedAnnotations.contains(k)) {
                             String sentence = annotation.getContext();
                             if (localSentence.equals(sentence)) {
@@ -207,7 +193,7 @@ public class AnnotatedCorpusGeneratorCSV {
                                 break;
                             }
                         }
-                        k++; 
+                        k++;
                     }
                 }
 
@@ -222,9 +208,9 @@ public class AnnotatedCorpusGeneratorCSV {
                 }
             } catch (ParsingException e) {
                 e.printStackTrace();
-            } catch(IOException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
 
@@ -236,20 +222,28 @@ public class AnnotatedCorpusGeneratorCSV {
         System.out.println("Total documents fully matched: " + allMatchedDoc);
     }
 
+    public ArticleUtilities getArticleUtilities() {
+        return articleUtilities;
+    }
+
+    public void setArticleUtilities(ArticleUtilities articleUtilities) {
+        this.articleUtilities = articleUtilities;
+    }
+
 
     private static class StreamGobbler implements Runnable {
         private InputStream inputStream;
         private Consumer<String> consumer;
-     
+
         public StreamGobbler(InputStream inputStream, Consumer<String> consumer) {
             this.inputStream = inputStream;
             this.consumer = consumer;
         }
-     
+
         @Override
         public void run() {
             new BufferedReader(new InputStreamReader(inputStream)).lines()
-              .forEach(consumer);
+                    .forEach(consumer);
         }
     }
 
@@ -261,11 +255,11 @@ public class AnnotatedCorpusGeneratorCSV {
         importCSVFiles(csvPath, documents, annotations);
 
         System.out.println("\n" + annotations.size() + " total annotations");
-        System.out.println(documents.size() + " total annotated documents");  
+        System.out.println(documents.size() + " total annotated documents");
         if (!documentPath.endsWith("/"))
             documentPath += "/";
 
-        DataseerClassifier dataseer = DataseerClassifier.getInstance();
+        DataseerClassifier dataseer = DataseerClassifier.getInstance(this.configuration.getDatastetConfiguration());
 
         // some counters
         int totalAnnotations = 0;
@@ -286,31 +280,30 @@ public class AnnotatedCorpusGeneratorCSV {
         int allMatchedDoc = 0;
         int allMatchedDocannotations = 0;
 
-        ArticleUtilities articleUtilities = new ArticleUtilities();
 
         // training file for binary classification (dataset/no_dataset)
         Writer writerCSVBinary = new PrintWriter(new BufferedWriter(
-            new FileWriter(csvPath + "all-binary.csv")));
-        CSVPrinter csvPrinterBinary = new CSVPrinter(writerCSVBinary, 
-            CSVFormat.DEFAULT.withHeader("doi", "text", "datatype"));
+                new FileWriter(csvPath + "all-binary.csv")));
+        CSVPrinter csvPrinterBinary = new CSVPrinter(writerCSVBinary,
+                CSVFormat.DEFAULT.withHeader("doi", "text", "datatype"));
 
         // training file with all the data types, first level
         Writer writerCSV1 = new PrintWriter(new BufferedWriter(
-            new FileWriter(csvPath + "all-1.csv")));
-        CSVPrinter csvPrinter1 = new CSVPrinter(writerCSV1, 
-            CSVFormat.DEFAULT.withHeader("doi", "text", "datatype", "dataSubtype", "leafDatatype"));
+                new FileWriter(csvPath + "all-1.csv")));
+        CSVPrinter csvPrinter1 = new CSVPrinter(writerCSV1,
+                CSVFormat.DEFAULT.withHeader("doi", "text", "datatype", "dataSubtype", "leafDatatype"));
 
         // training file for new versus reuse of datasets
         Writer writerCSVReuse = new PrintWriter(new BufferedWriter(
-            new FileWriter(csvPath + "all-reuse.csv")));
-        CSVPrinter csvPrinterReuse = new CSVPrinter(writerCSVReuse, 
-            CSVFormat.DEFAULT.withHeader("doi", "text", "datatype"));
+                new FileWriter(csvPath + "all-reuse.csv")));
+        CSVPrinter csvPrinterReuse = new CSVPrinter(writerCSVReuse,
+                CSVFormat.DEFAULT.withHeader("doi", "text", "datatype"));
 
         Writer failedPDFWriter = new PrintWriter(new BufferedWriter(
-            new FileWriter(documentPath + "/failed-pdf.txt")));
+                new FileWriter(documentPath + "/failed-pdf.txt")));
 
         Writer unmatchedSentencesWriter = new PrintWriter(new BufferedWriter(
-            new FileWriter(documentPath + "/unmatched-sentences.txt")));
+                new FileWriter(documentPath + "/unmatched-sentences.txt")));
 
         // go thought all annotated documents 
         m = 0;
@@ -328,9 +321,9 @@ public class AnnotatedCorpusGeneratorCSV {
 
             // this part output the text part in a csv format for classification
             String previousContext = null;
-            for(DataseerAnnotation annotation : doc.getAnnotations()) {
-                if (previousContext == null || 
-                    (previousContext != null && !previousContext.equals(annotation.getContext()))) {
+            for (DataseerAnnotation annotation : doc.getAnnotations()) {
+                if (previousContext == null ||
+                        (previousContext != null && !previousContext.equals(annotation.getContext()))) {
 
                     String localContext = annotation.getContext();
                     localContext = localContext.replace("[pagebreak]", " ");
@@ -339,9 +332,9 @@ public class AnnotatedCorpusGeneratorCSV {
                     localContext = localContext.replace("[column break]", " ");
                     localContext = localContext.replace("\n", " ");
                     localContext = localContext.replaceAll("( )+", " ");
-                    
-                    csvPrinter1.printRecord(doi, localContext, annotation.getDataType(), 
-                        annotation.getDataSubType(), annotation.getDataLeafType());
+
+                    csvPrinter1.printRecord(doi, localContext, annotation.getDataType(),
+                            annotation.getDataSubType(), annotation.getDataLeafType());
                     csvPrinter1.flush();
 
                     csvPrinterBinary.printRecord(doi, localContext, "dataset");
@@ -349,7 +342,7 @@ public class AnnotatedCorpusGeneratorCSV {
 
                     if (annotation.getExisting())
                         csvPrinterReuse.printRecord(doi, localContext, "reuse");
-                    else 
+                    else
                         csvPrinterReuse.printRecord(doi, localContext, "no_reuse");
                     csvPrinterReuse.flush();
 
@@ -359,7 +352,7 @@ public class AnnotatedCorpusGeneratorCSV {
             }
 
             // check if the TEI file already exists for this PDF
-            String teiPath = documentPath + "/" + URLEncoder.encode(doi, "UTF-8")+".tei.xml";
+            String teiPath = documentPath + "/" + URLEncoder.encode(doi, "UTF-8") + ".tei.xml";
             File teiFile = new File(teiPath);
 
             if (!teiFile.exists()) {
@@ -371,7 +364,7 @@ public class AnnotatedCorpusGeneratorCSV {
                     int ind1 = doi.indexOf("journal");
                     String fileName = doi.substring(ind1);
                     int ind2 = fileName.lastIndexOf(".");
-                    String plosPath = documentPath + fileName + ".xml"; 
+                    String plosPath = documentPath + fileName + ".xml";
 
                     System.out.println(plosPath);
                     // get the XML full text if available, otherwise PDF
@@ -389,8 +382,8 @@ public class AnnotatedCorpusGeneratorCSV {
                                 ProcessBuilder builder = new ProcessBuilder();
                                 builder.directory(new File(pub2teiPath));
 
-                                builder.command("java", "-jar", "Samples/saxon9he.jar", "-s:"+plosPath, "-xsl:Stylesheets/Publishers.xsl",
-                                    "-o:"+teiPath, "-dtd:off", "-a:off", "-expand:off", "-t");
+                                builder.command("java", "-jar", "Samples/saxon9he.jar", "-s:" + plosPath, "-xsl:Stylesheets/Publishers.xsl",
+                                        "-o:" + teiPath, "-dtd:off", "-a:off", "-expand:off", "-t");
                                 // java -jar Samples/saxon9he.jar -s:Samples/TestPubInput/BMJ/bmj_sample.xml -xsl:Stylesheets/Publishers.xsl -o:out.tei.xml -dtd:off -a:off -expand:off -t
 
                                 Process process = builder.start();
@@ -399,15 +392,15 @@ public class AnnotatedCorpusGeneratorCSV {
                                 int exitCode = process.waitFor();
                                 if (exitCode == 0)
                                     noXMLPlos = false;
-                            } catch(Exception e) {
+                            } catch (Exception e) {
                                 e.printStackTrace();
                             }
-                        }                        
+                        }
                     }
                 }
 
                 if (noXMLPlos) {
-                    String pdfFilePath = pdfPath + "/" + URLEncoder.encode(doi, "UTF-8")+".pdf";
+                    String pdfFilePath = pdfPath + "/" + URLEncoder.encode(doi, "UTF-8") + ".pdf";
 
                     // do we have the PDF file around?
                     File pdfFile = new File(pdfFilePath);
@@ -430,18 +423,18 @@ public class AnnotatedCorpusGeneratorCSV {
                     if (pdfFile.exists()) {
                         // produce TEI with GROBID
                         GrobidAnalysisConfig config = new GrobidAnalysisConfig.GrobidAnalysisConfigBuilder()
-                                                .consolidateHeader(1)
-                                                .consolidateCitations(0)
-                                                .withSentenceSegmentation(true)
-                                                .build();
+                                .consolidateHeader(1)
+                                .consolidateCitations(0)
+                                .withSentenceSegmentation(true)
+                                .build();
                         Engine engine = GrobidFactory.getInstance().getEngine();
                         String tei = null;
                         try {
                             tei = engine.fullTextToTEI(pdfFile, config);
-                        } catch(Exception e) {
+                        } catch (Exception e) {
                             e.printStackTrace();
                         }
-                        
+
                         // save TEI file
                         FileUtils.writeStringToFile(new File(teiPath), tei, UTF_8);
                     }
@@ -478,7 +471,7 @@ public class AnnotatedCorpusGeneratorCSV {
                         Node subnode = node.getChild(j);
                         if (subnode instanceof Text) {
                             textValue.append(subnode.getValue());
-                        } else if (subnode.getChildCount() > 0 ) {
+                        } else if (subnode.getChildCount() > 0) {
                             for (int q = 0; q < subnode.getChildCount(); q++) {
                                 Node subsubnode = subnode.getChild(q);
                                 if (subsubnode instanceof Text) {
@@ -496,8 +489,8 @@ public class AnnotatedCorpusGeneratorCSV {
                     // match sentence and inject attributes to sentence tags
                     boolean hasMatched = false;
                     int k = 0;
-                    
-                    for(DataseerAnnotation annotation : doc.getAnnotations()) {
+
+                    for (DataseerAnnotation annotation : doc.getAnnotations()) {
                         if (annotation.getRawDataType() == null) {
                             k++;
                             continue;
@@ -519,18 +512,18 @@ public class AnnotatedCorpusGeneratorCSV {
                             sentenceSimplified = sentenceSimplified.replace(" ", "");
                             sentenceSimplified = simplifiedField(sentenceSimplified);
 
-                            if (sentenceSimplified.length() < localSentenceSimplified.length()/2) {
+                            if (sentenceSimplified.length() < localSentenceSimplified.length() / 2) {
                                 k++;
                                 continue;
                             }
 
                             //System.out.println(sentence);
-                            if (localSentenceSimplified.equals(sentenceSimplified) || 
-                                localSentenceSimplified.indexOf(sentenceSimplified) != -1 ||
-                                sentenceSimplified.indexOf(localSentenceSimplified) != -1 || 
-                                localSentenceSimplified.indexOf(sentenceSimplified) != -1 ||
-                                sentenceSimplified.indexOf(localSentenceSimplified) != -1 || 
-                                docMatchedSentences.contains(sentenceSimplified)) {
+                            if (localSentenceSimplified.equals(sentenceSimplified) ||
+                                    localSentenceSimplified.indexOf(sentenceSimplified) != -1 ||
+                                    sentenceSimplified.indexOf(localSentenceSimplified) != -1 ||
+                                    localSentenceSimplified.indexOf(sentenceSimplified) != -1 ||
+                                    sentenceSimplified.indexOf(localSentenceSimplified) != -1 ||
+                                    docMatchedSentences.contains(sentenceSimplified)) {
 
                                 totalMatchedAnnotations++;
                                 //System.out.println("matched sentence! " + sentence);
@@ -538,7 +531,7 @@ public class AnnotatedCorpusGeneratorCSV {
 
                                 if (!docMatchedSentences.contains(sentenceSimplified)) {
                                     docMatchedSentences.add(sentenceSimplified);
-                                
+
                                     // add annotation attributes to the DOM sentence
                                     // e.g. id="dataset-2" type="Spectrometry"
                                     // add @corresp in case the @id is already generated
@@ -557,13 +550,13 @@ public class AnnotatedCorpusGeneratorCSV {
 
                                     // we also need to add a dataseer subtype attribute to the parent <div>
                                     nu.xom.ParentNode currentNode = node;
-                                    while(currentNode != null) {
-                                        currentNode = ((nu.xom.Element)currentNode).getParent();
-                                        if (currentNode != null && 
-                                            !(currentNode.getParent() instanceof nu.xom.Document) && 
-                                            ((nu.xom.Element)currentNode).getLocalName().equals("div")) {
+                                    while (currentNode != null) {
+                                        currentNode = ((nu.xom.Element) currentNode).getParent();
+                                        if (currentNode != null &&
+                                                !(currentNode.getParent() instanceof nu.xom.Document) &&
+                                                ((nu.xom.Element) currentNode).getLocalName().equals("div")) {
                                             Attribute subtype = new Attribute("subtype", "dataseer");
-                                            ((nu.xom.Element)currentNode).addAttribute(subtype);
+                                            ((nu.xom.Element) currentNode).addAttribute(subtype);
                                             currentNode = null;
                                         }
 
@@ -575,12 +568,12 @@ public class AnnotatedCorpusGeneratorCSV {
                                 //break;
                             }
                         }
-                        k++; 
+                        k++;
                     }
                 }
-                
+
                 int l = 0;
-                for(DataseerAnnotation annotation : doc.getAnnotations()) {
+                for (DataseerAnnotation annotation : doc.getAnnotations()) {
                     if (annotation.getRawDataType() == null) {
                         l++;
                         continue;
@@ -601,7 +594,8 @@ public class AnnotatedCorpusGeneratorCSV {
                     l++;
                 }
 
-                String teiOutPutPath = xmlPath + "/" + URLEncoder.encode(doi, "UTF-8")+".tei.xml";;
+                String teiOutPutPath = xmlPath + "/" + URLEncoder.encode(doi, "UTF-8") + ".tei.xml";
+                ;
                 //if (solvedAnnotations.size() == doc.getAnnotations().size()) {
 
                 System.out.println("\n" + doc.getDoi());
@@ -626,7 +620,7 @@ public class AnnotatedCorpusGeneratorCSV {
                 // we want to inject additional "negative" sentences in the training data for the ML models,
                 // in priority sentences from the same section as the ones introducing datasets
                 // consider only documents with all annotation matched (to avoid any false negatives)
-                
+
                 //if (solvedAnnotations.size() == doc.getAnnotations().size()) {
                 if (localUnmatchedAnnotations == 0) {
                     /*String teicontent = FileUtils.readFileToString(new File(teiOutPutPath), "UTF-8");
@@ -643,7 +637,7 @@ public class AnnotatedCorpusGeneratorCSV {
                     //Nodes nodesList = document.query("//div[@subtype='dataseer']");
 
                     //System.out.println("nb div: " + divs.size());
-                    
+
                     // check if we have a sentence in this section introducing a dataset
                     for (int i = 0; i < divs.size(); i++) {
                         //nu.xom.Node node = nodesList.get(i);
@@ -657,14 +651,14 @@ public class AnnotatedCorpusGeneratorCSV {
                             Elements paragraphs = div.getChildElements();
                             //System.out.println("nb paragraphs: " + paragraphs.size());
                             for (int j = 0; j < paragraphs.size(); j++) {
-                                Element paragraph = paragraphs.get(j); 
+                                Element paragraph = paragraphs.get(j);
                                 //System.out.println(paragraph.getQualifiedName());
                                 if (!paragraph.getQualifiedName().equals("p"))
                                     continue;
                                 Elements sentences = paragraph.getChildElements();
                                 //System.out.println("nb sentences: " + sentences.size());
                                 for (int k = 0; k < sentences.size(); k++) {
-                                    Element sentence = sentences.get(k); 
+                                    Element sentence = sentences.get(k);
                                     if (!sentence.getQualifiedName().equals("s"))
                                         continue;
                                     String attribute2 = sentence.getAttributeValue("type");
@@ -693,9 +687,9 @@ public class AnnotatedCorpusGeneratorCSV {
 
             } catch (ParsingException e) {
                 e.printStackTrace();
-            } catch(IOException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
 
@@ -719,8 +713,8 @@ public class AnnotatedCorpusGeneratorCSV {
         System.out.println("\n--------------------------------");
         System.out.println("\nTotal matched annotations: " + totalMatchedAnnotations + ", out of " + totalAnnotations);
         System.out.println("total unmatched annotations: " + totalUnmatchedAnnotations + ", out of " + totalAnnotations);
-        System.out.println("Total documents fully matched: " + allMatchedDoc + " (covering " + allMatchedDocannotations + 
-            " annotations) out of " +documents.size() + " documents");
+        System.out.println("Total documents fully matched: " + allMatchedDoc + " (covering " + allMatchedDocannotations +
+                " annotations) out of " + documents.size() + " documents");
 
         System.exit(0);
     }
@@ -728,7 +722,7 @@ public class AnnotatedCorpusGeneratorCSV {
     public static List<nu.xom.Element> getElementsByTagName(nu.xom.Element element, String tagName) {
         nu.xom.Elements children = element.getChildElements();
         List<nu.xom.Element> result = new ArrayList<>();
-        for(int i=0; i<children.size(); i++) {
+        for (int i = 0; i < children.size(); i++) {
             nu.xom.Element child = children.get(i);
             if (tagName.equals(child.getLocalName())) {
                 result.add(child);
@@ -781,9 +775,9 @@ public class AnnotatedCorpusGeneratorCSV {
                 DataseerAnnotation annotation = null;
                 String attribute = null;
                 String documentId = null;
-                for(int i=0; i<csvRecord.size(); i++) {
+                for (int i = 0; i < csvRecord.size(); i++) {
                     String value = csvRecord.get(i);
-                    if ( (value.trim().length() == 0) || (value.trim().equals("NA")) )
+                    if ((value.trim().length() == 0) || (value.trim().equals("NA")))
                         continue;
                     value = cleanValue(value);
                     if (i == 0) {
@@ -833,7 +827,7 @@ public class AnnotatedCorpusGeneratorCSV {
                     }
                 }
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -842,14 +836,14 @@ public class AnnotatedCorpusGeneratorCSV {
         value = value.trim();
         value = value.replace("\n", " ");
         if (value.startsWith("\""))
-            value = value.substring(1,value.length());
+            value = value.substring(1, value.length());
         if (value.endsWith("\""))
-            value = value.substring(0,value.length()-1);
+            value = value.substring(0, value.length() - 1);
         value = value.replaceAll(" +", " ");
         return value.trim();
     }
 
-    public static String simplifiedField(String field) { 
+    public static String simplifiedField(String field) {
         if (field == null)
             return "";
         return field.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
@@ -860,15 +854,16 @@ public class AnnotatedCorpusGeneratorCSV {
      *
      * @param args Command line arguments.
      */
-    public static void main(String[] args) {
-       
-        // we are expecting four arguments, absolute path to the available fulltext NLM
-        // documents, absolute path to the original PDF documents, absolute path to the csv files 
-        // with the dataseer manual annotations and finally path where to put the generated 
-        // training XML files 
+    public static void main(String[] args) throws IOException {
 
-        if (args.length != 4) {
-            System.err.println("Usage: command [absolute path to the original NLM fulltexts] [absolute path to PDF fulltexts] [absolute path to the dataseer root data in csv] [output for the generated XML files]");
+        // We are expecting four arguments:
+        // - absolute path to the available fulltext NLM documents,
+        // - absolute path to the original PDF documents,
+        // - absolute path to the csv files with the DataSeer manual annotations
+        // - path where to put the generated training XML files
+
+        if (args.length != 4 && args.length != 5) {
+            System.err.println("Usage: command [absolute path to the original NLM fulltexts] [absolute path to PDF fulltexts] [absolute path to the dataseer root data in csv] [output for the generated XML files] [configuration file Default: resources/config/config.yml]");
             System.exit(-1);
         }
 
@@ -883,28 +878,58 @@ public class AnnotatedCorpusGeneratorCSV {
         f = new File(pdfPath);
         if (!f.exists() || !f.isDirectory()) {
             System.out.println("PDF directory path does not exist, so it will be created (downloaded PDF will be stored and reused there).");
-            new File(pdfPath).mkdirs();
-        }     
+            Files.createDirectories(Paths.get(pdfPath));
+        }
 
         String csvPath = args[2];
         f = new File(csvPath);
         if (!f.exists() || !f.isDirectory()) {
-            System.err.println("path to dataseer annotated data csv directory does not exist or is invalid: " + csvPath);
+            System.err.println("Path to DataSeer annotated data csv directory does not exist or is invalid: " + csvPath);
             System.exit(-1);
-        }   
+        }
 
         String xmlPath = args[3];
         f = new File(xmlPath);
         if (!f.exists() || !f.isDirectory()) {
             System.out.println("XML output directory path does not exist, so it will be created");
-            new File(xmlPath).mkdirs();
-        }       
+            Files.createDirectories(Paths.get(xmlPath));
+        }
 
-        AnnotatedCorpusGeneratorCSV converter = new AnnotatedCorpusGeneratorCSV();
+        String configurationFilePath = args[4];
+        f = new File(xmlPath);
+        if (!f.exists() || !f.isFile()) {
+            System.out.println("Configuration file should exists and be a file: " + configurationFilePath);
+            f = new File("resources/config/config.yml");
+            if (!f.exists() || !f.isFile()) {
+                System.out.println("Cannot read config file from default location: " + f.getAbsolutePath());
+                System.exit(-1);
+            }
+            System.out.println("Attempt to read the configuration file from default location: " + f.getAbsolutePath());
+        }
+
+        DatastetServiceConfiguration configuration = readConfiguration(configurationFilePath);
+
+        AnnotatedCorpusGeneratorCSV converter = new AnnotatedCorpusGeneratorCSV(configuration);
         try {
             converter.process(documentNLMPath, pdfPath, csvPath, xmlPath);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public static DatastetServiceConfiguration readConfiguration(String configurationFilePath) {
+        ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory());
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        objectMapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
+
+        DatastetServiceConfiguration configuration = null;
+        try {
+            configuration = objectMapper.readValue(new File(configurationFilePath), DatastetServiceConfiguration.class);
+        } catch (IOException e) {
+            System.err.println("The config file does not appear valid, see resources/config/config.yml");
+            e.printStackTrace();
+        }
+
+        return configuration;
     }
 }

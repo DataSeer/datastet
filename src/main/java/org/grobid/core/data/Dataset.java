@@ -1,41 +1,34 @@
 package org.grobid.core.data;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.assertj.core.util.Strings;
-import org.grobid.core.engines.label.TaggingLabel;
-import org.grobid.core.utilities.TextUtilities;
-import org.grobid.core.utilities.OffsetPosition;
 import org.grobid.core.lexicon.DatastetLexicon;
-import org.grobid.core.layout.BoundingBox;
-import org.grobid.core.layout.LayoutToken;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.io.JsonStringEncoder;
-
-import java.util.List;
-import java.util.ArrayList;
-
+import org.grobid.core.utilities.OffsetPosition;
+import org.grobid.core.utilities.TextUtilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- *  Representation of a full context mention of a dataset entity (named or implicit expression).
- *  This description includes the dataset name and other related attributes like URL or data device 
- *  describing the entity.  
- *
+ * Representation of a full context mention of a dataset entity (named or implicit expression).
+ * This description includes the dataset name and other related attributes like URL or data device
+ * describing the entity.
  */
-public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {   
+public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
     private static final Logger logger = LoggerFactory.getLogger(Dataset.class);
-    
+
     // Orign of the component definition
     public enum DatasetType {
-        DATASET_NAME  ("dataset-name"),
-        DATASET    ("dataset"),
-        DATA_DEVICE ("data-device"),
-        URL ("url");
-        
+        DATASET_NAME("dataset-name"),
+        DATASET("dataset"),
+        DATA_DEVICE("data-device"),
+        URL("url");
+
         private String name;
 
         private DatasetType(String name) {
@@ -45,7 +38,9 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         public String getName() {
             return name;
         }
-    };
+    }
+
+    ;
 
     protected DatasetComponent datasetName = null;
     protected DatasetComponent dataset = null;
@@ -61,22 +56,22 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
 
     // surface form of the component as it appears in the source document
     protected String rawForm = null;
-    
+
     // list of layout tokens corresponding to the component mention in the source document
     //protected List<LayoutToken> tokens = null;
-    
+
     // normalized form of the component
     protected String normalizedForm = null;
-    
+
     // relative offset positions in context, if defined and expressed as (Java) character offset
     //protected OffsetPosition offsets = null;
-    
+
     // confidence score of the component in context, if defined
     protected double conf = 0.8;
-    
+
     // optional bounding box in the source document
     //protected List<BoundingBox> boundingBoxes = null;
-    
+
     // language
     protected String lang = null;
 
@@ -106,7 +101,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
     // the text context where the entity takes place - typically a snippet with the 
     // sentence including the mention
     private String context = null;
-    
+
     // offset of the context with respect of the paragraph 
     private int paragraphContextOffset = -1;
 
@@ -359,10 +354,10 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
     @Override
     public boolean equals(Object object) {
         boolean result = false;
-        if ( (object != null) && object instanceof Dataset) {
-            int start = ((Dataset)object).getOffsetStart();
-            int end = ((Dataset)object).getOffsetEnd();
-            if ( (start == this.getOffsetStart()) && (end == this.getOffsetEnd()) ) {
+        if ((object != null) && object instanceof Dataset) {
+            int start = ((Dataset) object).getOffsetStart();
+            int end = ((Dataset) object).getOffsetEnd();
+            if ((start == this.getOffsetStart()) && (end == this.getOffsetEnd())) {
                 result = true;
             }
         }
@@ -373,13 +368,13 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
     public int compareTo(Dataset theEntity) {
         int start = theEntity.getOffsetStart();
         int end = theEntity.getOffsetEnd();
-        
-        if (this.getOffsetStart() != start) 
+
+        if (this.getOffsetStart() != start)
             return this.getOffsetStart() - start;
-        else 
+        else
             return this.getOffsetEnd() - end;
     }
-    
+
     public String toJson() {
         ObjectMapper mapper = new ObjectMapper();
         JsonStringEncoder encoder = JsonStringEncoder.getInstance();
@@ -431,13 +426,13 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         if (normalizedForm != null) {
             encoded = encoder.quoteAsUTF8(normalizedForm);
             output = new String(encoded);
-            try{
+            try {
                 buffer.append(", \"normalizedForm\" : " + mapper.writeValueAsString(output));
             } catch (JsonProcessingException e) {
                 logger.warn("could not serialize in JSON the normalized form: " + type.getName());
             }
         }
-        
+
         // knowledge information
         if (wikidataId != null) {
             buffer.append(", \"wikidataId\": \"" + wikidataId + "\"");
@@ -484,7 +479,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
 
             encoded = encoder.quoteAsUTF8(paragraph.replace("\n", " ").replace("  ", " "));
             output = new String(encoded);
-            try{
+            try {
                 buffer.append(", \"paragraph\": \"" + mapper.writeValueAsString(output) + "\"");
             } catch (JsonProcessingException e) {
                 logger.warn("could not serialize in JSON the normalized form: " + type.getName());
@@ -497,11 +492,11 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         }
 
         if (CollectionUtils.isNotEmpty(sequenceIdentifiers)) {
-            try{
-                String identifiers = Strings.join(sequenceIdentifiers).with(",");
+            try {
+                String identifiers = String.join(",", sequenceIdentifiers);
                 encoded = encoder.quoteAsUTF8(identifiers);
                 output = new String(encoded);
-                buffer.append(", \"sequenceIds\": [ " + mapper.writeValueAsString(output) +" ]");
+                buffer.append(", \"sequenceIds\": [ " + mapper.writeValueAsString(output) + " ]");
             } catch (JsonProcessingException e) {
                 logger.warn("could not serialize in JSON the normalized form: " + type.getName());
             }
@@ -526,7 +521,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
             }
             buffer.append("] ");
         }*/
-        
+
         if (mentionContextAttributes != null) {
             buffer.append(", \"mentionContextAttributes\": " + mentionContextAttributes.toJson());
         }
@@ -536,9 +531,9 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         }
 
         if (bibRefs != null) {
-            buffer.append(", \"references\": ["); 
+            buffer.append(", \"references\": [");
             boolean first = true;
-            for(BiblioComponent bibRef : bibRefs) {
+            for (BiblioComponent bibRef : bibRefs) {
                 if (bibRef.getBiblio() == null)
                     continue;
                 if (!first)
@@ -583,7 +578,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
     }*/
 
     /**
-     * This is a string normalization process adapted to the dataset 
+     * This is a string normalization process adapted to the dataset
      * attribute strings
      */
     private static String normalizeRawForm(String raw) {
@@ -595,7 +590,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         result = DatastetLexicon.getInstance().removeLeadingEnglishStopwords(result);
         return result;
     }
-    
+
     public void mergeDocumentContextAttributes(DatasetContextAttributes attributes) {
         if (this.documentContextAttributes == null)
             this.documentContextAttributes = attributes;
@@ -605,7 +600,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         }
 
         if (this.documentContextAttributes.getUsedScore() != null) {
-            if (attributes.getUsedScore() > this.documentContextAttributes.getUsedScore()) 
+            if (attributes.getUsedScore() > this.documentContextAttributes.getUsedScore())
                 this.documentContextAttributes.setUsedScore(attributes.getUsedScore());
         } else
             this.documentContextAttributes.setUsedScore(attributes.getUsedScore());
@@ -615,7 +610,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         }
 
         if (this.documentContextAttributes.getCreatedScore() != null) {
-            if (attributes.getCreatedScore() > this.documentContextAttributes.getCreatedScore()) 
+            if (attributes.getCreatedScore() > this.documentContextAttributes.getCreatedScore())
                 this.documentContextAttributes.setCreatedScore(attributes.getCreatedScore());
         } else
             this.documentContextAttributes.setCreatedScore(attributes.getCreatedScore());
@@ -625,7 +620,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         }
 
         if (this.documentContextAttributes.getSharedScore() != null) {
-            if (attributes.getSharedScore() > this.documentContextAttributes.getSharedScore()) 
+            if (attributes.getSharedScore() > this.documentContextAttributes.getSharedScore())
                 this.documentContextAttributes.setSharedScore(attributes.getSharedScore());
         } else
             this.documentContextAttributes.setSharedScore(attributes.getSharedScore());
@@ -633,7 +628,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
 
     /**
      * Assuming that dataset names are identical, this method merges the attributes
-     * of the two entities.    
+     * of the two entities.
      */
     public static void merge(Dataset entity1, Dataset entity2) {
 
@@ -655,7 +650,7 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
 
     /**
      * Assuming that dataset names are identical, this method merges the attributes
-     * of the two entities with a copy of the added attribute component.    
+     * of the two entities with a copy of the added attribute component.
      */
     public static void mergeWithCopy(Dataset entity1, Dataset entity2) {
 
@@ -671,15 +666,14 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
 
         if (entity1.getBibRefs() == null && entity2.getBibRefs() != null) {
             List<BiblioComponent> newBibRefs = new ArrayList<>();
-            for(BiblioComponent bibComponent : entity2.getBibRefs()) {
+            for (BiblioComponent bibComponent : entity2.getBibRefs()) {
                 newBibRefs.add(new BiblioComponent(bibComponent));
             }
             if (newBibRefs.size() > 0)
                 entity1.setBibRefs(newBibRefs);
-        }
-        else if (entity2.getBibRefs() == null && entity1.getBibRefs() != null) {
+        } else if (entity2.getBibRefs() == null && entity1.getBibRefs() != null) {
             List<BiblioComponent> newBibRefs = new ArrayList<>();
-            for(BiblioComponent bibComponent : entity1.getBibRefs()) {
+            for (BiblioComponent bibComponent : entity1.getBibRefs()) {
                 newBibRefs.add(new BiblioComponent(bibComponent));
             }
             if (newBibRefs.size() > 0)
@@ -687,4 +681,4 @@ public class Dataset extends KnowledgeEntity implements Comparable<Dataset> {
         }
     }
 
- }
+}

@@ -1,8 +1,11 @@
-package org.grobid.core.utilities;
+package org.grobid.service.configuration;
 
-import org.grobid.core.utilities.GrobidConfig.ModelParameters;
-import java.util.*;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.grobid.core.utilities.GrobidConfig;
+import org.grobid.core.utilities.GrobidConfig.ModelParameters;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DatastetConfiguration {
@@ -20,7 +23,8 @@ public class DatastetConfiguration {
     private String entityFishingPort;
 
     //models (sequence labeling and text classifiers)
-    public List<ModelParameters> models;
+    private List<GrobidConfig.ModelParameters> models = new ArrayList<>();
+
 
     public String getCorpusPath() {
         return this.corpusPath;
@@ -72,7 +76,7 @@ public class DatastetConfiguration {
     }
 
     public ModelParameters getModel(String modelName) {
-        for(ModelParameters parameters : models) {
+        for (ModelParameters parameters : models) {
             if (parameters.name.equals(modelName)) {
                 return parameters;
             }

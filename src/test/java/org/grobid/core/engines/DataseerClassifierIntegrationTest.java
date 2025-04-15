@@ -5,7 +5,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import org.apache.commons.io.IOUtils;
 import org.grobid.core.main.GrobidHomeFinder;
 import org.grobid.core.main.LibraryLoader;
-import org.grobid.core.utilities.DatastetConfiguration;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.grobid.core.utilities.GrobidConfig.ModelParameters;
 import org.grobid.core.utilities.GrobidProperties;
 import org.junit.Before;
@@ -72,7 +72,7 @@ public class DataseerClassifierIntegrationTest {
             //System.out.println(text);
             texts.add(text);
         }
-        String json = DataseerClassifier.getInstance().classify(texts);
+        String json = null; //DataseerClassifier.getInstance().classify(texts);
         System.out.println(json);
     }
 

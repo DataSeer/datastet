@@ -1,34 +1,25 @@
 package org.grobid.trainer;
 
 import org.grobid.core.GrobidModels;
-import org.grobid.core.document.Document;
-import org.grobid.core.document.DocumentSource;
-import org.grobid.core.engines.EngineParsers;
-import org.grobid.core.engines.DataseerParser;
 import org.grobid.core.engines.DataseerClassifier;
-import org.grobid.core.engines.config.GrobidAnalysisConfig;
+import org.grobid.core.engines.DataseerParser;
 import org.grobid.core.exceptions.GrobidException;
-import org.grobid.core.features.FeaturesVectorDataseer;
-import org.grobid.core.layout.Block;
 import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.layout.PDFAnnotation;
-import org.grobid.core.lexicon.DatastetLexicon;
 import org.grobid.core.main.GrobidHomeFinder;
 import org.grobid.core.utilities.GrobidProperties;
-import org.grobid.core.utilities.OffsetPosition;
 import org.grobid.core.utilities.Pair;
-import org.grobid.core.utilities.DatastetConfiguration;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.grobid.trainer.evaluation.EvaluationUtilities;
+import org.grobid.trainer.sax.DataseerAnnotationSaxHandler;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import java.io.*;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import static org.grobid.trainer.AnnotatedCorpusGeneratorCSV.readConfiguration;
 
 /**
  * Training of the dataseer section labeling model
@@ -37,22 +28,16 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
  */
 public class DataseerTrainer extends AbstractTrainer {
 
-    private DataseerClassifier classifier;
+    private final DataseerClassifier classifier;
     private DatastetConfiguration datastetConfiguration;
 
-    public DataseerTrainer() {
-        this(0.00001, 20, 0);
-        classifier = DataseerClassifier.getInstance();
+    public DataseerTrainer(DatastetConfiguration datastetConfiguration) {
+        this(0.00001, 20, 0, datastetConfiguration);
     }
 
-    public void setDatastetConfiguration(DatastetConfiguration config) {
-        this.datastetConfiguration = config;
-    }
-
-    public DataseerTrainer(double epsilon, int window, int nbMaxIterations) {
+    public DataseerTrainer(double epsilon, int window, int nbMaxIterations, DatastetConfiguration datastetConfiguration) {
         super(GrobidModels.DATASEER);
-
-        classifier = DataseerClassifier.getInstance();
+        this.classifier = DataseerClassifier.getInstance(datastetConfiguration);
 
         // adjusting CRF training parameters for this model
         this.epsilon = epsilon;
@@ -83,7 +68,7 @@ public class DataseerTrainer extends AbstractTrainer {
 
 
     /**
-     * CRF training data here are produced from the unique training TEI file 
+     * CRF training data here are produced from the unique training TEI file
      */
     public int createCRFPPData(final File corpusDir,
                                final File trainingOutputPath,
@@ -124,20 +109,20 @@ public class DataseerTrainer extends AbstractTrainer {
             // the active writer
             Writer writer = null;
 
-            // this ratio this the minimum proportion of token with non default label, it is used to 
+            // this ratio this the minimum proportion of token with non default label, it is used to
             // decide to keep or not a paragraph without any entities in the training data
             //double ratioNegativeSample = 0.01;
 
             // get a factory for SAX parser
             SAXParserFactory spf = SAXParserFactory.newInstance();
-            for (int n=0; n<refFiles.length; n++) {
+            for (int n = 0; n < refFiles.length; n++) {
                 //if (n > 10)
                 //    break;
                 File tf = refFiles[n];
                 String name = tf.getName();
                 System.out.println("Processing: " + name);
 
-                DataseerAnnotationSaxHandler handler = new DataseerAnnotationSaxHandler(classifier);            
+                DataseerAnnotationSaxHandler handler = new DataseerAnnotationSaxHandler(classifier);
 
                 //get a new instance of parser
                 SAXParser p = spf.newSAXParser();
@@ -146,8 +131,8 @@ public class DataseerTrainer extends AbstractTrainer {
                 //List<List<Pair<String, String>>> allLabeled = handler.getLabeledResult();
                 //labeled = subSample(labeled, ratioNegativeSample);
                 List<List<LayoutToken>> segments = handler.getSegments();
-                List<String> sectionTypes = handler.getSectionTypes(); 
-                List<Integer> nbDatasets = handler.getNbDatasets(); 
+                List<String> sectionTypes = handler.getSectionTypes();
+                List<Integer> nbDatasets = handler.getNbDatasets();
                 List<String> datasetTypes = handler.getDatasetTypes();
                 List<String> labels = handler.getLabels();
 
@@ -168,7 +153,7 @@ public class DataseerTrainer extends AbstractTrainer {
 
                 // put the labels
                 String[] lines = featured.split("\n");
-                for (int i=0; i<lines.length; i++) {
+                for (int i = 0; i < lines.length; i++) {
                     String line = lines[i];
                     writer.write(line);
                     writer.write(" ");
@@ -193,7 +178,7 @@ public class DataseerTrainer extends AbstractTrainer {
     }
 
     /**
-     *  Ensure a ratio between positive and negative examples and shuffle
+     * Ensure a ratio between positive and negative examples and shuffle
      */
     private List<Pair<String, String>> subSample(List<Pair<String, String>> labeled, double targetRatio) {
         int nbPositionTokens = 0;
@@ -201,7 +186,7 @@ public class DataseerTrainer extends AbstractTrainer {
 
         List<Pair<String, String>> reSampled = new ArrayList<Pair<String, String>>();
         List<Pair<String, String>> newSampled = new ArrayList<Pair<String, String>>();
-        
+
         boolean hasLabels = false;
         for (Pair<String, String> tagPair : labeled) {
             if (tagPair.getB() == null) {
@@ -209,12 +194,12 @@ public class DataseerTrainer extends AbstractTrainer {
                 if (hasLabels) {
                     reSampled.addAll(newSampled);
                     reSampled.add(tagPair);
-                } 
+                }
                 newSampled = new ArrayList<Pair<String, String>>();
                 hasLabels = false;
             } else {
                 newSampled.add(tagPair);
-                if (!tagPair.getB().equals("<other>") && !tagPair.getB().equals("other") && !tagPair.getB().equals("O")) 
+                if (!tagPair.getB().equals("<other>") && !tagPair.getB().equals("other") && !tagPair.getB().equals("O"))
                     hasLabels = true;
             }
         }
@@ -277,32 +262,31 @@ public class DataseerTrainer extends AbstractTrainer {
      * @param args Command line arguments.
      */
     public static void main(String[] args) {
-        DatastetConfiguration datastetConfiguration = null;
-        try {
-            ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-            datastetConfiguration = mapper.readValue(new File("resources/config/config.yml"), DatastetConfiguration.class);
-        } catch(Exception e) {
-            System.err.println("The config file does not appear valid, see resources/config/config.yml");
+        DatastetConfiguration datastetConfiguration = readConfiguration(args[0]).getDatastetConfiguration();
+
+        if (datastetConfiguration == null) {
+            throw new IllegalStateException("Dataseer configuration file not found or not valid.");
         }
 
         try {
             String pGrobidHome = datastetConfiguration.getGrobidHome();
 
-            GrobidHomeFinder grobidHomeFinder = new GrobidHomeFinder(Arrays.asList(pGrobidHome));
+            GrobidHomeFinder grobidHomeFinder = new GrobidHomeFinder(Collections.singletonList(pGrobidHome));
             GrobidProperties.getInstance(grobidHomeFinder);
-    
-            System.out.println(">>>>>>>> GROBID_HOME="+GrobidProperties.get_GROBID_HOME_PATH());
+
+            System.out.println(">>>>>>>> GROBID_HOME=" + GrobidProperties.get_GROBID_HOME_PATH());
         } catch (final Exception exp) {
             System.err.println("GROBID dataseer initialisation failed: " + exp);
             exp.printStackTrace();
         }
 
-        DataseerClassifier classifier = DataseerClassifier.getInstance();
-
-        Trainer trainer = new DataseerTrainer();
-        ((DataseerTrainer) trainer).setDatastetConfiguration(datastetConfiguration);
+        Trainer trainer = new DataseerTrainer(datastetConfiguration);
         AbstractTrainer.runTraining(trainer);
         System.out.println(AbstractTrainer.runEvaluation(trainer));
         System.exit(0);
+    }
+
+    public void setDatastetConfiguration(DatastetConfiguration config) {
+        this.datastetConfiguration = config;
     }
 }

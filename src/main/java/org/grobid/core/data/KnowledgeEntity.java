@@ -1,13 +1,7 @@
 package org.grobid.core.data;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.util.List;
-
 /**
- *  Attributes in relation to disambiguation against a Knowledge base.
- *
+ * Attributes in relation to disambiguation against a Knowledge base.
  */
 public class KnowledgeEntity {
 
@@ -48,7 +42,7 @@ public class KnowledgeEntity {
         this.disambiguationScore = disambiguationScore;
     }
 
-    /** 
+    /**
      * Copy the knowledge entity information to another entity
      */
     public void copyKnowledgeInformationTo(KnowledgeEntity otherEntity) {

@@ -1,17 +1,14 @@
- package org.grobid.core.sax;
-
-import org.xml.sax.*;
-import org.xml.sax.helpers.*;
-
-import java.util.ArrayList;
-import java.util.List;
+package org.grobid.core.sax;
 
 import org.grobid.core.data.BiblioItem;
 import org.grobid.core.data.Person;
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
 
 /**
  * SAX parser to parse a TEI biblStruct element into a BiblioItem
- * 
+ * <p>
  * To be likely moved to Grobid core.
  *
  * @author Patrice Lopez
@@ -102,7 +99,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
     private String clean(String text) {
         text = text.replace("\n", " ");
         text = text.replace("\t", " ");
-        text = text.replace(" ", " "); 
+        text = text.replace(" ", " ");
         // the last one is a special "large" space missed by the regex "\\p{Space}+" bellow
         text = text.replaceAll("\\p{Space}+", " ");
         return text;
@@ -126,16 +123,16 @@ public class BiblStructSaxHandler extends DefaultHandler {
                 biblioItem.setBookTitle(title);
             else if (level == null || level.equals("a"))
                 biblioItem.setTitle(title);
-            else if (level.equals("j")) 
+            else if (level.equals("j"))
                 biblioItem.setJournal(title);
-            else if (level.equals("m")) 
+            else if (level.equals("m"))
                 biblioItem.setBookTitle(title);
-            else if (level.equals("s")) 
+            else if (level.equals("s"))
                 biblioItem.setSerieTitle(title);
             level = null;
         } else if (qName.equals("idno")) {
             String identifier = getText();
-            if (identifier != null && identifier.length()>4) {
+            if (identifier != null && identifier.length() > 4) {
                 if (type == null) {
                     biblioItem.setPubnum(identifier);
                 } else if (type.equals("doi") || type.equals("DOI")) {
@@ -181,7 +178,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
         } else if (qName.equals("date")) {
             if (type != null && type.equals("year")) {
                 biblioItem.setYear(getText());
-            }  
+            }
             biblioItem.setPublicationDate(getText());
             type = null;
         } else if (qName.equals("biblScope")) {
@@ -196,9 +193,8 @@ public class BiblStructSaxHandler extends DefaultHandler {
                         }
                         if (intSubUnitValue != -1) {
                             biblioItem.setBeginPage(intSubUnitValue);
-                            biblioItem.setPageRange(""+intSubUnitValue);
-                        }
-                        else 
+                            biblioItem.setPageRange("" + intSubUnitValue);
+                        } else
                             biblioItem.setPageRange(this.subUnitValue);
                     } else {
                         int intSubUnitValue = -1;
@@ -210,13 +206,12 @@ public class BiblStructSaxHandler extends DefaultHandler {
                         }
                         if (intSubUnitValue != -1) {
                             biblioItem.setBeginPage(intSubUnitValue);
-                            biblioItem.setPageRange(""+intSubUnitValue);
-                        }
-                        else 
+                            biblioItem.setPageRange("" + intSubUnitValue);
+                        } else
                             biblioItem.setPageRange(subUnitValue);
                     }
                 } else if (subUnit != null && subUnit.equals("to")) {
-                    if (subUnitValue!= null) {
+                    if (subUnitValue != null) {
                         int intSubUnitValue = -1;
                         try {
                             intSubUnitValue = Integer.parseInt(subUnitValue);
@@ -228,7 +223,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
                             if (biblioItem.getPageRange() != null)
                                 biblioItem.setPageRange(biblioItem.getPageRange() + "--" + intSubUnitValue);
                             else
-                                biblioItem.setPageRange(""+intSubUnitValue);
+                                biblioItem.setPageRange("" + intSubUnitValue);
                         } else {
                             if (biblioItem.getPageRange() != null)
                                 biblioItem.setPageRange(biblioItem.getPageRange() + "--" + subUnitValue);
@@ -248,15 +243,14 @@ public class BiblStructSaxHandler extends DefaultHandler {
                             if (biblioItem.getPageRange() != null)
                                 biblioItem.setPageRange(biblioItem.getPageRange() + "--" + intSubUnitValue);
                             else
-                                biblioItem.setPageRange(""+intSubUnitValue);
-                        }
-                        else {
+                                biblioItem.setPageRange("" + intSubUnitValue);
+                        } else {
                             if (biblioItem.getPageRange() != null)
                                 biblioItem.setPageRange(biblioItem.getPageRange() + "--" + subUnitValue);
                             else
                                 biblioItem.setPageRange(subUnitValue);
                         }
-                    } 
+                    }
                 } else {
                     biblioItem.setPageRange(getText());
                 }
@@ -264,7 +258,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
                 biblioItem.setVolumeBlock(getText(), false);
             } else if (this.unit != null && (this.unit.equals("issue") || this.unit.equals("number"))) {
                 biblioItem.setIssue(getText());
-            } 
+            }
             unit = null;
             subUnit = null;
             subUnitValue = null;
@@ -273,7 +267,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
         } else if (qName.equals("pubPlace")) {
             biblioItem.setLocation(getText());
         }
-        
+
         accumulator.setLength(0);
     }
 
@@ -356,7 +350,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
                     } else if (name.equals("to")) {
                         this.subUnit = "to";
                         this.subUnitValue = value;
-                    } 
+                    }
                 }
             }
         } else if (qName.equals("date")) {
@@ -372,7 +366,7 @@ public class BiblStructSaxHandler extends DefaultHandler {
                     }
                 }
             }
-        } 
+        }
         accumulator.setLength(0);
     }
 

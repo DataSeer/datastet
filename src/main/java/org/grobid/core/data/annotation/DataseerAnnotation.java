@@ -1,18 +1,10 @@
-package org.grobid.trainer;
-
-import java.util.*;
-
-import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.utilities.OffsetPosition;
+package org.grobid.core.data.annotation;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 /**
- * 
- * POJO for dataseer annotation, filled by parsing original dataseer csv dataset, with JSON serialization. 
+ * POJO for dataseer annotation, filled by parsing original dataseer csv dataset, with JSON serialization.
  *
  * @author Patrice
  */
@@ -34,7 +26,7 @@ public class DataseerAnnotation extends Annotation {
 
     // identifier (number) of the dataset in the document
     private String datasetId = null;
-    
+
     // the sentence text as quoted
     private String context = null;
 
@@ -43,7 +35,7 @@ public class DataseerAnnotation extends Annotation {
 
     // sentence
     private String text = null;
-    
+
     // properties
     private String meshDataType = null;
     private String rawDataType = null;
@@ -115,10 +107,10 @@ public class DataseerAnnotation extends Annotation {
         String[] pieces = rawDataType.split(":");
         if (pieces.length >= 1) {
             this.dataType = pieces[0];
-        } 
+        }
         if (pieces.length >= 2) {
             this.dataSubType = pieces[1];
-        } 
+        }
         if (pieces.length == 3) {
             this.dataLeafType = pieces[2];
         }
@@ -204,7 +196,7 @@ public class DataseerAnnotation extends Annotation {
 
     public void setExisting(boolean existing) {
         this.existing = existing;
-    } 
+    }
 
     public String getPage() {
         return this.page;
@@ -226,15 +218,15 @@ public class DataseerAnnotation extends Annotation {
         builder.append("text: " + text + "\n");
         builder.append("existing: " + existing + "\n");
         builder.append("meshDataType: " + meshDataType + "\n");
-        builder.append("rawDataType: " + rawDataType + "\n");    
+        builder.append("rawDataType: " + rawDataType + "\n");
         builder.append("dataType: " + dataType + "\n");
-        builder.append("dataSubType: " + dataSubType + "\n");    
+        builder.append("dataSubType: " + dataSubType + "\n");
         builder.append("dataLeafType: " + meshDataType + "\n");
-        builder.append("dataKeyword: " + dataKeyword + "\n");        
+        builder.append("dataKeyword: " + dataKeyword + "\n");
         builder.append("dataAction: " + dataAction + "\n");
-        builder.append("acquisitionEquipment: " + acquisitionEquipment + "\n");    
+        builder.append("acquisitionEquipment: " + acquisitionEquipment + "\n");
         builder.append("memo: " + memo + "\n");
-        builder.append("section: " + section + "\n");    
+        builder.append("section: " + section + "\n");
         builder.append("subsection: " + subsection + "\n");
 
         return builder.toString();
