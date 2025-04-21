@@ -407,9 +407,11 @@ public class DataseerClassifier {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
             DocumentBuilder builder = factory.newDocumentBuilder();
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(xmlString)));
-            //document.getDocumentElement().normalize();
-            tei = processTEIDocument(document, segmentSentences);
+            try (StringReader reader = new StringReader(xmlString)) {
+                org.w3c.dom.Document document = builder.parse(new InputSource(reader));
+                //document.getDocumentElement().normalize();
+                tei = processTEIDocument(document, segmentSentences);
+            }
         } catch (ParserConfigurationException | IOException e) {
             e.printStackTrace();
         }
@@ -432,12 +434,13 @@ public class DataseerClassifier {
             if (avoidDomParserBug)
                 tei = avoidDomParserAttributeBug(tei);
 
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(tei)));
-            //document.getDocumentElement().normalize();
-            tei = processTEIDocument(document, segmentSentences);
-            if (avoidDomParserBug)
-                tei = restoreDomParserAttributeBug(tei);
-
+            try (StringReader reader = new StringReader(tei)) {
+                org.w3c.dom.Document document = builder.parse(new InputSource(reader));
+                //document.getDocumentElement().normalize();
+                tei = processTEIDocument(document, segmentSentences);
+                if (avoidDomParserBug)
+                    tei = restoreDomParserAttributeBug(tei);
+            }
         } catch (ParserConfigurationException | IOException e) {
             e.printStackTrace();
         }
@@ -489,12 +492,13 @@ public class DataseerClassifier {
             //if (avoidDomParserBug)
             //    tei = avoidDomParserAttributeBug(tei);
 
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(tei)));
-            //document.getDocumentElement().normalize();
-            tei = processTEIDocument(document, true);
-            //if (avoidDomParserBug)
-            //    tei = restoreDomParserAttributeBug(tei); 
-
+            try (StringReader reader = new StringReader(tei)) {
+                org.w3c.dom.Document document = builder.parse(new InputSource(reader));
+                //document.getDocumentElement().normalize();
+                tei = processTEIDocument(document, true);
+                //if (avoidDomParserBug)
+                //    tei = restoreDomParserAttributeBug(tei); 
+            }
         } catch (ParserConfigurationException | IOException e) {
             e.printStackTrace();
         } finally {
@@ -541,10 +545,10 @@ public class DataseerClassifier {
                     }
                     String fullSent = "<s xmlns=\"http://www.tei-c.org/ns/1.0\">" + newSent + "</s>";
                     boolean fail = false;
-                    try {
+                    try (StringReader reader = new StringReader(fullSent)) {
                         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
                         factory.setNamespaceAware(true);
-                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(new StringReader(fullSent)));
+                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(reader));
                     } catch (Exception e) {
                         fail = true;
                     }
@@ -568,16 +572,16 @@ public class DataseerClassifier {
 
                     //System.out.println(sent);  
 
-                    try {
+                    try (StringReader reader = new StringReader(sent)) {
                         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
                         factory.setNamespaceAware(true);
-                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(new StringReader(sent)));
+                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(reader));
                         //d.getDocumentElement().normalize();
                         Node newNode = doc.importNode(d.getDocumentElement(), true);
                         newNodes.add(newNode);
                         //System.out.println(serialize(doc, newNode));
                     } catch (Exception e) {
-
+                        // Ignore exception
                     }
                 }
 
@@ -947,15 +951,14 @@ public class DataseerClassifier {
     }
 
     public static String serialize(org.w3c.dom.Document doc, Node node) {
-        DOMSource domSource = null;
-        String xml = null;
-        try {
-            if (node == null) {
-                domSource = new DOMSource(doc);
-            } else {
-                domSource = new DOMSource(node);
-            }
-            StringWriter writer = new StringWriter();
+        DOMSource domSource;
+        if (node == null) {
+            domSource = new DOMSource(doc);
+        } else {
+            domSource = new DOMSource(node);
+        }
+
+        try (StringWriter writer = new StringWriter()) {
             StreamResult result = new StreamResult(writer);
             TransformerFactory tf = TransformerFactory.newInstance();
             Transformer transformer = tf.newTransformer();
@@ -965,11 +968,11 @@ public class DataseerClassifier {
             if (node != null)
                 transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             transformer.transform(domSource, result);
-            xml = writer.toString();
-        } catch (TransformerException ex) {
+            return writer.toString();
+        } catch (TransformerException | IOException ex) {
             ex.printStackTrace();
+            return null;
         }
-        return xml;
     }
 
     public String serializeLs(org.w3c.dom.Document doc) {

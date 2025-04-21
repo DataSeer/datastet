@@ -15,6 +15,7 @@ import org.grobid.trainer.sax.DataseerAnnotationSaxHandler;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -77,34 +78,27 @@ public class DataseerTrainer extends AbstractTrainer {
                                boolean splitRandom) {
 
         int totalExamples = 0;
-        Writer writerTraining = null;
-        Writer writerEvaluation = null;
-        try {
-            System.out.println("labeled corpus path: " + corpusDir.getPath());
-            System.out.println("training data path: " + trainingOutputPath.getPath());
-            if (evalOutputPath != null)
-                System.out.println("evaluation data path: " + evalOutputPath.getPath());
+        System.out.println("labeled corpus path: " + corpusDir.getPath());
+        System.out.println("training data path: " + trainingOutputPath.getPath());
+        if (evalOutputPath != null)
+            System.out.println("evaluation data path: " + evalOutputPath.getPath());
 
-            // we need first to generate the labeled files from the TEI annotated files
-            // we process all tei files in the output directory
-            File input = new File(corpusDir.getAbsolutePath());
-            File[] refFiles = input.listFiles(new FilenameFilter() {
-                public boolean accept(File dir, String name) {
-                    return name.endsWith(".tei.xml") || name.endsWith(".tei");
-                }
-            });
-            System.out.println(refFiles.length + " tei files");
+        // we need first to generate the labeled files from the TEI annotated files
+        // we process all tei files in the output directory
+        File input = new File(corpusDir.getAbsolutePath());
+        File[] refFiles = input.listFiles(
+                (dir, name) -> name.endsWith(".tei.xml") || name.endsWith(".tei")
+        );
+        if (refFiles == null) {
+            return 0;
+        }
 
-            if (refFiles == null) {
-                return 0;
-            }
+        System.out.println(refFiles.length + " tei files");
 
-            // the file for writing the training data
-            writerTraining = new OutputStreamWriter(new FileOutputStream(trainingOutputPath), "UTF8");
-
-            // the file for writing the evaluation data
-            if (evalOutputPath != null)
-                writerEvaluation = new OutputStreamWriter(new FileOutputStream(evalOutputPath), "UTF8");
+        // the file for writing the training data
+        try (Writer writerTraining = new OutputStreamWriter(new FileOutputStream(trainingOutputPath), "UTF8");
+             Writer writerEvaluation = evalOutputPath != null ? 
+                 new OutputStreamWriter(new FileOutputStream(evalOutputPath), StandardCharsets.UTF_8) : null) {
 
             // the active writer
             Writer writer = null;
@@ -125,8 +119,12 @@ public class DataseerTrainer extends AbstractTrainer {
                 DataseerAnnotationSaxHandler handler = new DataseerAnnotationSaxHandler(classifier);
 
                 //get a new instance of parser
-                SAXParser p = spf.newSAXParser();
-                p.parse(tf, handler);
+                try {
+                    SAXParser p = spf.newSAXParser();
+                    p.parse(tf, handler);
+                } catch (Exception e) {
+                    throw new GrobidException("An exception occurred while parsing file: " + name, e);
+                }
 
                 //List<List<Pair<String, String>>> allLabeled = handler.getLabeledResult();
                 //labeled = subSample(labeled, ratioNegativeSample);
@@ -163,16 +161,7 @@ public class DataseerTrainer extends AbstractTrainer {
                 writer.write("\n");
             }
         } catch (Exception e) {
-            throw new GrobidException("An exception occured while training GROBID.", e);
-        } finally {
-            try {
-                if (writerTraining != null)
-                    writerTraining.close();
-                if (writerEvaluation != null)
-                    writerEvaluation.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            throw new GrobidException("An exception occurred while training GROBID.", e);
         }
         return totalExamples;
     }
