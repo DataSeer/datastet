@@ -44,8 +44,8 @@ description = """datastet"""
 
 import org.apache.tools.ant.taskdefs.condition.Os
 
-sourceCompatibility = 1.11
-targetCompatibility = 1.11
+sourceCompatibility = 1.17
+targetCompatibility = 1.17
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
