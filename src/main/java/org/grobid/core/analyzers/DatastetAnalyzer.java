@@ -1,7 +1,7 @@
 package org.grobid.core.analyzers;
 
-import org.grobid.core.layout.LayoutToken;
 import org.grobid.core.lang.Language;
+import org.grobid.core.layout.LayoutToken;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,8 +21,8 @@ public class DatastetAnalyzer implements org.grobid.core.analyzers.Analyzer {
         if (instance == null) {
             //double check idiom
             // synchronized (instanceController) {
-                if (instance == null)
-                    getNewInstance();
+            if (instance == null)
+                getNewInstance();
             // }
         }
         return instance;
@@ -111,7 +111,7 @@ public class DatastetAnalyzer implements org.grobid.core.analyzers.Analyzer {
         return result;
     }
 
-     public List<LayoutToken> tokenize(LayoutToken chunk) {
+    public List<LayoutToken> tokenize(LayoutToken chunk) {
         List<LayoutToken> result = new ArrayList<>();
         String text = chunk.getText();
         StringTokenizer st = new StringTokenizer(text, DELIMITERS, true);
@@ -127,7 +127,7 @@ public class DatastetAnalyzer implements org.grobid.core.analyzers.Analyzer {
         }
 
         return result;
-    } 
+    }
 
     public List<LayoutToken> retokenizeSubdigitsFromLayoutToken(List<LayoutToken> tokens) {
         // already done by this analyzer

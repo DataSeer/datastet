@@ -1,40 +1,36 @@
 package org.grobid.service;
 
-import com.google.inject.Module;
-import com.hubspot.dropwizard.guicier.GuiceBundle;
-import io.dropwizard.Application;
+import com.google.inject.AbstractModule;
 import io.dropwizard.assets.AssetsBundle;
+import io.dropwizard.core.Application;
+import io.dropwizard.core.setup.Bootstrap;
+import io.dropwizard.core.setup.Environment;
 import io.dropwizard.forms.MultiPartBundle;
-import io.dropwizard.setup.Bootstrap;
-import io.dropwizard.setup.Environment;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterRegistration;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.eclipse.jetty.servlets.QoSFilter;
 import org.grobid.service.configuration.DatastetServiceConfiguration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.grobid.service.controller.HealthCheck;
+import ru.vyarus.dropwizard.guice.GuiceBundle;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.FilterRegistration;
-import java.util.Arrays;
 import java.util.EnumSet;
 
 public class DatastetApplication extends Application<DatastetServiceConfiguration> {
     private static final String RESOURCES = "/service";
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(DatastetApplication.class);
 
     @Override
     public String getName() {
         return "datastet";
     }
 
-    private Iterable<? extends Module> getGuiceModules() {
-        return Arrays.asList(new DatastetServiceModule());
+    private AbstractModule getGuiceModules() {
+        return new DatastetServiceModule();
     }
 
     @Override
     public void initialize(Bootstrap<DatastetServiceConfiguration> bootstrap) {
-        GuiceBundle<DatastetServiceConfiguration> guiceBundle = GuiceBundle.defaultBuilder(DatastetServiceConfiguration.class)
+        GuiceBundle guiceBundle = GuiceBundle.builder()
                 .modules(getGuiceModules())
                 .build();
         bootstrap.addBundle(guiceBundle);
@@ -45,6 +41,7 @@ public class DatastetApplication extends Application<DatastetServiceConfiguratio
 
     @Override
     public void run(DatastetServiceConfiguration configuration, Environment environment) {
+        environment.healthChecks().register("health-check", new HealthCheck(configuration));
 
         environment.jersey().setUrlPattern(RESOURCES + "/*");
 

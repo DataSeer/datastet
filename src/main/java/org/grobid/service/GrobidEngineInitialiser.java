@@ -3,19 +3,19 @@ package org.grobid.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.collect.ImmutableList;
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import org.grobid.core.lexicon.DatastetLexicon;
 import org.grobid.core.main.GrobidHomeFinder;
 import org.grobid.core.main.LibraryLoader;
-import org.grobid.core.utilities.DatastetConfiguration;
 import org.grobid.core.utilities.GrobidConfig;
 import org.grobid.core.utilities.GrobidConfig.ModelParameters;
 import org.grobid.core.utilities.GrobidProperties;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.grobid.service.configuration.DatastetServiceConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.io.File;
 import java.lang.reflect.Field;
 

@@ -3,7 +3,7 @@ package org.grobid.core.lexicon;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import org.grobid.core.main.GrobidHomeFinder;
-import org.grobid.core.utilities.DatastetConfiguration;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.grobid.core.utilities.GrobidConfig.ModelParameters;
 import org.grobid.core.utilities.GrobidProperties;
 import org.junit.BeforeClass;

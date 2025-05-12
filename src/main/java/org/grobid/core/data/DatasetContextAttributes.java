@@ -1,15 +1,10 @@
 package org.grobid.core.data;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.util.List;
-
 /**
- *  This class represents characteristics of mention context(s) for a dataset with the following attributes:
- *  - used: dataset usage by the research work disclosed in the document
- *  - created: dataset creation/contribution of the research work disclosed in the document (creation, extension, etc.)
- *  - shared: dataset is claimed shared via a sharing statement
+ * This class represents characteristics of mention context(s) for a dataset with the following attributes:
+ * - used: dataset usage by the research work disclosed in the document
+ * - created: dataset creation/contribution of the research work disclosed in the document (creation, extension, etc.)
+ * - shared: dataset is claimed shared via a sharing statement
  * Scores in [0,1] and binary class values are stored for each attribute.
  */
 public class DatasetContextAttributes {
@@ -26,7 +21,7 @@ public class DatasetContextAttributes {
 
     public Boolean getUsed() {
         return this.used;
-    } 
+    }
 
     public void setUsed(Boolean used) {
         this.used = used;
@@ -42,7 +37,7 @@ public class DatasetContextAttributes {
 
     public Boolean getCreated() {
         return this.created;
-    } 
+    }
 
     public void setCreated(Boolean created) {
         this.created = created;
@@ -50,7 +45,7 @@ public class DatasetContextAttributes {
 
     public Double getCreatedScore() {
         return this.createdScore;
-    } 
+    }
 
     public void setCreatedScore(Double createdScore) {
         this.createdScore = createdScore;
@@ -58,15 +53,15 @@ public class DatasetContextAttributes {
 
     public Boolean getShared() {
         return this.shared;
-    } 
+    }
 
     public void setShared(Boolean shared) {
         this.shared = shared;
-    } 
+    }
 
     public Double getSharedScore() {
         return this.sharedScore;
-    } 
+    }
 
     public void setSharedScore(Double sharedScore) {
         this.sharedScore = sharedScore;

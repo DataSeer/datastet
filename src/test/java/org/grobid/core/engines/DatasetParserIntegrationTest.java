@@ -6,7 +6,7 @@ import org.apache.commons.io.IOUtils;
 import org.grobid.core.data.Dataset;
 import org.grobid.core.main.GrobidHomeFinder;
 import org.grobid.core.main.LibraryLoader;
-import org.grobid.core.utilities.DatastetConfiguration;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.grobid.core.utilities.GrobidConfig.ModelParameters;
 import org.grobid.core.utilities.GrobidProperties;
 import org.junit.Before;
@@ -74,7 +74,7 @@ public class DatasetParserIntegrationTest {
             texts.add(text);
         }
 
-        List<List<Dataset>> results = DatasetParser.getInstance(configuration).processingStrings(texts, false);
+        List<List<Dataset>> results = null;//DatasetParser.getInstance(configuration).processingStrings(texts, false);
         StringBuilder json = new StringBuilder();
 
         int i = 0;

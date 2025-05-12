@@ -1,22 +1,19 @@
 package org.grobid.core.utilities;
 
-import java.io.*;
-
-import java.net.MalformedURLException;
-import java.net.URL;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.config.CookieSpecs;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.LaxRedirectStrategy;
-import org.apache.http.client.config.CookieSpecs;
-import org.apache.http.client.config.RequestConfig;
 
+import java.io.*;
+import java.net.URL;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
@@ -40,7 +37,7 @@ public class Downloader {
             IOUtils.closeQuietly(httpclient);
         }
     }
-    
+
     static class FileDownloadResponseHandler implements ResponseHandler<File> {
 
         private final File target;
@@ -55,43 +52,43 @@ public class Downloader {
             FileUtils.copyInputStreamToFile(source, this.target);
             return this.target;
         }
-        
+
     }
-    
+
     private static class StreamGobbler implements Runnable {
         private InputStream inputStream;
         private Consumer<String> consumer;
-     
+
         public StreamGobbler(InputStream inputStream, Consumer<String> consumer) {
             this.inputStream = inputStream;
             this.consumer = consumer;
         }
-     
+
         @Override
         public void run() {
             new BufferedReader(new InputStreamReader(inputStream)).lines()
-              .forEach(consumer);
+                    .forEach(consumer);
         }
     }
 
-    /** 
-     *  Normally no need to use this, the Apache http client is very robust 
+    /**
+     * Normally no need to use this, the Apache http client is very robust
      */
     public File downloadExternal(URL url, File dstFile) throws Exception {
         boolean isWindows = System.getProperty("os.name").toLowerCase().startsWith("windows");
 
         if (isWindows) {
             throw new Exception("Windows does not support this method, use standard Apache Java Http Client");
-        } 
+        }
 
         ProcessBuilder builder = new ProcessBuilder();
-        builder.command("wget", "--user-agent=\"Mozilla/5.0 (Windows NT 5.2; rv:2.0.1) Gecko/20100101 Firefox/4.0.1\"", 
-            "-O", dstFile.getPath(), url.toString());
+        builder.command("wget", "--user-agent=\"Mozilla/5.0 (Windows NT 5.2; rv:2.0.1) Gecko/20100101 Firefox/4.0.1\"",
+                "-O", dstFile.getPath(), url.toString());
         //System.out.println("wget --user-agent=\"Mozilla/5.0 (Windows NT 5.2; rv:2.0.1) Gecko/20100101 Firefox/4.0.1\" -O " 
         //    + dstFile.getPath() + " " + url.toString());
         Process process = builder.start();
-        StreamGobbler streamGobbler = 
-          new StreamGobbler(process.getInputStream(), System.out::println);
+        StreamGobbler streamGobbler =
+                new StreamGobbler(process.getInputStream(), System.out::println);
         Executors.newSingleThreadExecutor().submit(streamGobbler);
         int exitCode = process.waitFor();
         if (exitCode != 0) {

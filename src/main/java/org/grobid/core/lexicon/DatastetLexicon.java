@@ -1,23 +1,16 @@
 package org.grobid.core.lexicon;
 
+import org.apache.commons.lang3.StringUtils;
 import org.grobid.core.exceptions.GrobidException;
 import org.grobid.core.exceptions.GrobidResourceException;
-import org.grobid.core.utilities.GrobidProperties;
-import org.grobid.core.utilities.Pair;
-import org.grobid.core.utilities.OffsetPosition;
-import org.grobid.core.utilities.LayoutTokensUtil;
-import org.grobid.core.utilities.Utilities;
-import org.grobid.core.lexicon.FastMatcher;
-import org.grobid.core.layout.LayoutToken;
-
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -47,12 +40,14 @@ public class DatastetLexicon {
 
     // to use the url pattern in grobid-core after merging branch update_header
     static public final Pattern urlPattern = Pattern
-        .compile("(?i)(https?|ftp)\\s?:\\s?//\\s?[-A-Z0-9+&@#/%=~_:.]*[-A-Z0-9+&@#/%=~_]");
+            .compile("(?i)(https?|ftp)\\s?:\\s?//\\s?[-A-Z0-9+&@#/%=~_:.]*[-A-Z0-9+&@#/%=~_]");
 
-    public static synchronized DatastetLexicon getInstance() {
-        if (instance == null)
-            instance = new DatastetLexicon();
-
+    public static DatastetLexicon getInstance() {
+        if (instance == null) {
+            synchronized (DatastetLexicon.class) {
+                instance = new DatastetLexicon();
+            }
+        }
         return instance;
     }
 
@@ -62,16 +57,7 @@ public class DatastetLexicon {
         LOGGER.info("Init Datastet lexicon");
 
         // term idf
-        File file = new File("resources/lexicon/idf.label.en.txt.gz").getAbsoluteFile();
-        file = new File(file.getAbsolutePath());
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize dataset dictionary, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize dataset dictionary, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
+        File file = getFileFromPath("resources/lexicon/idf.label.en.txt.gz");
 
         BufferedReader dis = null;
         // read the idf file
@@ -95,7 +81,7 @@ public class DatastetLexicon {
                 double idf = 0.0;
                 try {
                     idf = Double.parseDouble(idfString);
-                } catch(Exception e) {
+                } catch (Exception e) {
                     LOGGER.warn("Invalid idf format: " + idfString);
                     continue;
                 }
@@ -103,29 +89,20 @@ public class DatastetLexicon {
                 termIDF.put(term, Double.valueOf(idf));
             }
         } catch (FileNotFoundException e) {
-            throw new GrobidException("SoftwareLexicon file not found.", e);
+            throw new GrobidException("Datastet Lexicon file not found.", e);
         } catch (IOException e) {
-            throw new GrobidException("Cannot read SoftwareLexicon file.", e);
+            throw new GrobidException("Cannot read Datastet Lexicon file.", e);
         } finally {
             try {
                 if (dis != null)
                     dis.close();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 throw new GrobidResourceException("Cannot close IO stream.", e);
             }
         }
 
         // read the datacite DOI prefixes
-        file = new File("resources/lexicon/doiPrefixes.txt").getAbsoluteFile();
-        file = new File(file.getAbsolutePath());
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize DatasetLexicon DOI prefix file, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize DatasetLexicon DOI prefix file, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
+        file = getFileFromPath("resources/lexicon/doiPrefixes.txt");
 
         dis = null;
         try {
@@ -135,7 +112,7 @@ public class DatastetLexicon {
             String l = null;
             while ((l = dis.readLine()) != null) {
                 l = l.trim();
-                if (l.length() == 0) 
+                if (l.length() == 0)
                     continue;
                 doiPrefixes.add(l);
             }
@@ -147,22 +124,14 @@ public class DatastetLexicon {
             try {
                 if (dis != null)
                     dis.close();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 throw new GrobidResourceException("DatasetLexicon DOI prefix file: cannot close IO stream.", e);
             }
         }
 
         // read the data source url domains 
-        file = new File("resources/lexicon/domains.txt").getAbsoluteFile();
-        file = new File(file.getAbsolutePath());
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize DatasetLexicon url domain file, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize DatasetLexicon url domain file, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
+        file = getFileFromPath("resources/lexicon/domains.txt");
+
         dis = null;
         try {
             urlDomains = new HashSet<>();
@@ -171,7 +140,7 @@ public class DatastetLexicon {
             String l = null;
             while ((l = dis.readLine()) != null) {
                 l = l.trim();
-                if (l.length() == 0) 
+                if (l.length() == 0)
                     continue;
                 urlDomains.add(l);
             }
@@ -183,31 +152,16 @@ public class DatastetLexicon {
             try {
                 if (dis != null)
                     dis.close();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 throw new GrobidResourceException("DatasetLexicon url domain file: cannot close IO stream.", e);
             }
         }
 
         // a list of stopwords for English for conservative checks with dataset names
         englishStopwords = new ArrayList<>();
-        file = new File("resources/lexicon/stopwords_en.txt");
-        file = new File(file.getAbsolutePath());
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize English stopwords, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize English stopwords, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize English stopwords, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize English stopwords, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
+
+        file = getFileFromPath("resources/lexicon/stopwords_en.txt");
+
         // read the file
         try {
             dis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
@@ -224,39 +178,22 @@ public class DatastetLexicon {
             try {
                 if (dis != null)
                     dis.close();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 throw new GrobidResourceException("Cannot close IO stream.", e);
             }
         }
 
-         // a black list of for English in biomed domain
+        // a black list of for English in biomed domain
         blackListBioMed = new ArrayList<>();
-        file = new File("resources/lexicon/covid_blacklist.txt");
-        file = new File(file.getAbsolutePath());
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize covid blacklist, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.exists()) {
-            throw new GrobidResourceException("Cannot initialize covid blacklist, because file '" + 
-                file.getAbsolutePath() + "' does not exists.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize covid blacklist, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
-        if (!file.canRead()) {
-            throw new GrobidResourceException("Cannot initialize covid blacklist, because cannot read file '" + 
-                file.getAbsolutePath() + "'.");
-        }
+        file = getFileFromPath("resources/lexicon/covid_blacklist.txt");
         // read the file
         try {
             dis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
             String l = null;
             while ((l = dis.readLine()) != null) {
-                if (l.length() == 0) continue;
-                if (l.startsWith("#")) continue;
-                if (l.trim().length() == 0) continue;
+                if (StringUtils.isBlank(l) || l.startsWith("#")) {
+                    continue;
+                }
                 blackListBioMed.add(l.trim().toLowerCase());
             }
         } catch (FileNotFoundException e) {
@@ -267,88 +204,33 @@ public class DatastetLexicon {
             try {
                 if (dis != null)
                     dis.close();
-            } catch(Exception e) {
+            } catch (Exception e) {
                 throw new GrobidResourceException("Cannot close IO stream.", e);
             }
         }
     }
 
-    // to use the same method in grobid-core Utilities.java after merging branch update_header
-    public static List<OffsetPosition> convertStringOffsetToTokenOffset(
-        List<OffsetPosition> stringPosition, List<LayoutToken> tokens) {
-        List<OffsetPosition> result = new ArrayList<OffsetPosition>();
-        int indexText = 0;
-        int indexToken = 0;
-        OffsetPosition currentPosition = null;
-        LayoutToken token = null;
-        for(OffsetPosition pos : stringPosition) {
-            while(indexToken < tokens.size()) {
+    private File getFileFromPath(String filePath) {
+        Path path = Paths.get(filePath);
+        File file = path.toFile();
 
-                token = tokens.get(indexToken);
-                if (token.getText() == null) {
-                    indexToken++;
-                    continue;
-                }
-                
-                if (indexText >= pos.start) {
-                    // we have a start
-                    currentPosition = new OffsetPosition(indexToken, indexToken);
-                    // we need an end
-                    boolean found = false;
-                    while(indexToken < tokens.size()) {
-                        token = tokens.get(indexToken);
-
-                        if (token.getText() == null) {
-                            indexToken++;
-                            continue;
-                        }
-
-                        if (indexText+token.getText().length() >= pos.end) {
-                            // we have an end
-                            currentPosition.end = indexToken;
-                            result.add(currentPosition);
-                            found = true;
-                            break;
-                        }
-                        indexToken++;
-                        indexText += token.getText().length();
-                    }
-                    if (found) {
-                        indexToken++;
-                        indexText += token.getText().length();
-                        break;
-                    } else {
-                        currentPosition.end = indexToken-1;
-                        result.add(currentPosition);
-                    }
-                }
-                indexToken++;
-                indexText += token.getText().length();
-            }
+        if (!file.exists()) {
+            throw new GrobidResourceException("Cannot initialize dataset lexicon because file '" +
+                    file.getAbsolutePath() + "' does not exists.");
         }
-        return result;
-    }
+        if (!file.canRead()) {
+            throw new GrobidResourceException("Cannot initialize dataset lexicon because cannot read file '" +
+                    file.getAbsolutePath() + "'.");
+        }
 
-    public List<OffsetPosition> tokenPositionsUrlVectorLabeled(List<Pair<String, String>> pairs) {
-        List<LayoutToken> tokens = new ArrayList<LayoutToken>();
-        for(Pair<String, String> thePair : pairs) {
-            tokens.add(new LayoutToken(thePair.getA()));
-        }
-        String text = LayoutTokensUtil.toText(tokens);
-        List<OffsetPosition> textResult = new ArrayList<OffsetPosition>();
-        Matcher urlMatcher = urlPattern.matcher(text);
-        while (urlMatcher.find()) {  
-            //System.out.println(urlMatcher.start() + " / " + urlMatcher.end() + " / " + text.substring(urlMatcher.start(), urlMatcher.end()));                 
-            textResult.add(new OffsetPosition(urlMatcher.start(), urlMatcher.end()));
-        }
-        return convertStringOffsetToTokenOffset(textResult, tokens);
+        return file;
     }
 
     public double getTermIDF(String term) {
         Double idf = termIDF.get(term);
         if (idf != null)
             return idf.doubleValue();
-        else 
+        else
             return 0.0;
     }
 
@@ -358,12 +240,12 @@ public class DatastetLexicon {
 
     public boolean inSoftwareCategories(String value) {
         return wikipediaCategories.contains(value.toLowerCase());
-    }  */ 
+    }  */
 
     public boolean isEnglishStopword(String value) {
         if (this.englishStopwords == null || value == null)
             return false;
-        if (value.length() == 1) 
+        if (value.length() == 1)
             value = value.toLowerCase();
         return this.englishStopwords.contains(value);
     }
@@ -374,17 +256,17 @@ public class DatastetLexicon {
         }
 
         string = string.trim();
-        while(string.length()>0) {
+        while (string.length() > 0) {
             int startSize = string.length();
             // note: create a fast matcher...
-            for(String stopword : this.englishStopwords) {
-                if (string.startsWith(stopword+" ")) {
+            for (String stopword : this.englishStopwords) {
+                if (string.startsWith(stopword + " ")) {
                     string = string.substring(stopword.length(), string.length());
                     string = string.trim();
                     break;
                 }
             }
-            if (startSize - string.length() == 0) 
+            if (startSize - string.length() == 0)
                 break;
         }
 
@@ -394,24 +276,26 @@ public class DatastetLexicon {
     /**
      * Return a boolean value indicating if an URL or DOI is data DOI (referenced by datacite)
      * or a known dataset URL.
-     * 
+     * <p>
      * To determine this, we use a list of DOI prefix collected from a datacite dump and a list
      * of known domains of data repository.
      */
     public boolean isDatasetURLorDOI(String url) {
-        if (url == null || url.length() == 0)
+        if (StringUtils.isBlank(url)) {
             return false;
+        }
         return (isDatasetURL(url) || isDatasetDOI(url));
     }
 
     /**
      * Return a boolean value indicating if an URL data source as a known dataset URL.
-     * 
+     * <p>
      * To determine this, we use a list of known domains of data repository.
      */
     public boolean isDatasetURL(String url) {
-        if (url == null || url.length() == 0)
+        if (StringUtils.isBlank(url)) {
             return false;
+        }
 
         // strip protocol prefix
         if (url.startsWith("https://"))
@@ -423,7 +307,7 @@ public class DatastetLexicon {
 
         // strip url path
         int ind = url.indexOf("/");
-        if (ind != -1) 
+        if (ind != -1)
             url = url.substring(0, ind);
 
         if (urlDomains != null && urlDomains.contains(url))
@@ -433,7 +317,7 @@ public class DatastetLexicon {
 
     /**
      * Return a boolean value indicating if a DOI is data DOI (referenced by datacite).
-     * 
+     * <p>
      * To determine this, we use a list of DOI prefix collected from a datacite dump.
      */
     public boolean isDatasetDOI(String doi) {
@@ -446,7 +330,7 @@ public class DatastetLexicon {
 
         // strip url path
         int ind = doi.indexOf("/");
-        if (ind != -1) 
+        if (ind != -1)
             doi = doi.substring(0, ind);
 
         if (doiPrefixes != null && doiPrefixes.contains(doi))
@@ -456,29 +340,29 @@ public class DatastetLexicon {
 
     // basic black list (it should be built semi-automatically in future version and to be put in a file), not enough content
     // for a full named dataset
-    private List<String> blackListNamedDataset = 
-        Arrays.asList("data", "dataset", "datasets", "data set", "data sets", "cell", "cells", "file", "files", "model", "models",
-            "record", "records", "column", "columns", "line", "lines", "tnbc", "pam", "patient", "patients", "uhrf", "normal",
-            "discovery", "manuscript", "draft", "database", "data base", "databases", "data bases", "base", "bases", "square",
-            "mission", "missions", "subject", "subjects");
+    private List<String> blackListNamedDataset =
+            Arrays.asList("data", "dataset", "datasets", "data set", "data sets", "cell", "cells", "file", "files", "model", "models",
+                    "record", "records", "column", "columns", "line", "lines", "tnbc", "pam", "patient", "patients", "uhrf", "normal",
+                    "discovery", "manuscript", "draft", "database", "data base", "databases", "data bases", "base", "bases", "square",
+                    "mission", "missions", "subject", "subjects");
 
     public boolean isBlackListedNamedDataset(String term) {
         if (term == null || term.length() == 0)
             return false;
 
-        if (blackListNamedDataset.contains(term.toLowerCase())) 
+        if (blackListNamedDataset.contains(term.toLowerCase()))
             return true;
 
-        if (blackListBioMed.contains(term.toLowerCase())) 
+        if (blackListBioMed.contains(term.toLowerCase()))
             return true;
 
         // temporary force filtering all the models, waiting for more training data and negative examples 
-        if (term.toLowerCase().endsWith("model") || term.toLowerCase().endsWith("models") )
+        if (term.toLowerCase().endsWith("model") || term.toLowerCase().endsWith("models"))
             return true;
 
-        if (term.startsWith("ð")) 
+        if (term.startsWith("ð"))
             return true;
-         
+
         return false;
     }
 

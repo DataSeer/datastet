@@ -1,9 +1,8 @@
 package org.grobid.core.features;
 
 import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.utilities.TextUtilities;
 
-import java.util.*;
+import java.util.List;
 
 /**
  * Class for features used for dataseer segment selections
@@ -12,12 +11,12 @@ import java.util.*;
  */
 public class FeaturesVectorDataseer {
     public List<LayoutToken> tokens = null; // not a feature, reference value
-    
+
     public String string = null; // first lexical feature
     public String secondString = null; // second lexical feature
     public String thirdString = null; // second lexical feature
     public String label = null; // label if known
-    
+
     public String sectionType = null; // header or paragraph or list
     public boolean has_dataset; // if the segment has been predicted as having a dataset by the classifier
     public int nbDataset = 0; // number of predicted data sentences in the segment (implicit, not named, datasets), discretised
@@ -28,9 +27,9 @@ public class FeaturesVectorDataseer {
     //public boolean singleChar = false;
     //public String punctType = null; // one of NOPUNCT, OPENBRACKET, ENDBRACKET, DOT, COMMA, HYPHEN, QUOTE, PUNCT (default)
     public int relativeDocumentPosition = -1; // discretized 
-    
+
     //public String punctuationProfile = null; // the punctuations of the current line of the token
-    
+
     public int segmentLength = 0; // discretized 
     public int characterDensity = 0; // discretized 
 
@@ -43,7 +42,7 @@ public class FeaturesVectorDataseer {
 
         // token string (0)
         res.append(string);
-        
+
         // second token string (1)
         if (secondString != null)
             res.append(" " + secondString);
@@ -51,11 +50,11 @@ public class FeaturesVectorDataseer {
             res.append(" " + string);
 
         // third token string (2)
-        if (thirdString != null) 
+        if (thirdString != null)
             res.append(" " + thirdString);
         else
             res.append(" " + string);
-        
+
         // lowercase string (3)
         res.append(" " + string.toLowerCase());
 
@@ -106,7 +105,7 @@ public class FeaturesVectorDataseer {
 
         // relative document position (8)
         res.append(" " + relativeDocumentPosition);
-        
+
         // punctuation profile
         /*if ( (punctuationProfile == null) || (punctuationProfile.length() == 0) ) {
             // string profile

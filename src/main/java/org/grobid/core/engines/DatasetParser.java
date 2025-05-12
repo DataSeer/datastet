@@ -3,13 +3,15 @@ package org.grobid.core.engines;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import nu.xom.Element;
 import nu.xom.Node;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.grobid.core.GrobidModel;
+import org.apache.commons.lang3.tuple.Triple;
 import org.grobid.core.GrobidModels;
 import org.grobid.core.analyzers.DatastetAnalyzer;
 import org.grobid.core.data.*;
@@ -37,14 +39,13 @@ import org.grobid.core.lexicon.Lexicon;
 import org.grobid.core.tokenization.TaggingTokenCluster;
 import org.grobid.core.tokenization.TaggingTokenClusteror;
 import org.grobid.core.utilities.*;
-import org.apache.commons.lang3.tuple.Triple;
 import org.grobid.core.utilities.counters.impl.CntManagerFactory;
+import org.grobid.service.configuration.DatastetServiceConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-import javax.xml.crypto.Data;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -66,43 +67,53 @@ import static org.grobid.core.utilities.XMLUtilities.*;
  *
  * @author Patrice
  */
+@Singleton
 public class DatasetParser extends AbstractParser {
     private static final Logger LOGGER = LoggerFactory.getLogger(DatasetParser.class);
 
     private static volatile DatasetParser instance;
 
     private EngineParsers parsers;
-    private DatastetConfiguration datastetConfiguration;
+    private DatastetServiceConfiguration datastetConfiguration;
     private DataseerClassifier dataseerClassifier;
+    private DatasetContextClassifier datasetContextClassifier;
     private DatasetDisambiguator disambiguator;
 
-    public static DatasetParser getInstance(DatastetConfiguration configuration) {
+    public static DatasetParser getInstance(
+            DatastetServiceConfiguration configuration,
+            DataseerClassifier dataseerClassifier,
+            DatasetContextClassifier datasetContextClassifier,
+            DatasetDisambiguator disambiguator
+    ) {
+
         if (instance == null) {
-            getNewInstance(configuration);
+            synchronized (DatasetParser.class) {
+                if (instance == null) {
+                    instance = new DatasetParser(configuration, dataseerClassifier, datasetContextClassifier, disambiguator);
+                }
+            }
         }
+
         return instance;
     }
 
-    /**
-     * Create a new instance.
-     */
-    private static synchronized void getNewInstance(DatastetConfiguration configuration) {
-        instance = new DatasetParser(configuration);
-    }
-
-    protected DatasetParser(GrobidModel model) {
-        super(model);
-    }
-
-    private DatasetParser(DatastetConfiguration configuration) {
+    @Inject
+    private DatasetParser(
+            DatastetServiceConfiguration configuration,
+            DataseerClassifier dataseerClassifier,
+            DatasetContextClassifier datasetContextClassifier,
+            DatasetDisambiguator disambiguator
+    ) {
         super(DatasetModels.DATASET, CntManagerFactory.getCntManager(),
-                GrobidCRFEngine.valueOf(configuration.getModel("datasets").engine.toUpperCase()),
-                configuration.getModel("datasets").delft.architecture);
+                GrobidCRFEngine.valueOf(configuration.getDatastetConfiguration().getModel("datasets").engine.toUpperCase()),
+                configuration.getDatastetConfiguration().getModel("datasets").delft.architecture);
 
+        this.dataseerClassifier = dataseerClassifier;
         DatastetLexicon.getInstance();
-        parsers = new EngineParsers();
-        datastetConfiguration = configuration;
-        disambiguator = DatasetDisambiguator.getInstance(configuration);
+        this.parsers = new EngineParsers();
+        this.datastetConfiguration = configuration;
+        this.disambiguator = disambiguator;
+        this.datasetContextClassifier = datasetContextClassifier;
     }
 
     public List<List<Dataset>> processing(List<DatasetDocumentSequence> tokensList) {
@@ -598,7 +609,7 @@ System.out.println(localDatasetcomponent.toJson());
     private List<DataseerResults> classifyWithDataseerClassifier(List<String> allSentences) {
         // pre-process classification of every sentence in batch
         if (this.dataseerClassifier == null)
-            dataseerClassifier = DataseerClassifier.getInstance();
+            dataseerClassifier = DataseerClassifier.getInstance(this.datastetConfiguration.getDatastetConfiguration());
 
         int totalClassificationNodes = 0;
 
@@ -1439,7 +1450,7 @@ for(String sentence : allSentences) {
                 entities = markDAS(entities, availabilityTokens);
 
             // finally classify the context for predicting the role of the dataset mention
-            entities = DatasetContextClassifier.getInstance(datastetConfiguration).classifyDocumentContexts(entities);
+            entities = this.datasetContextClassifier.classifyDocumentContexts(entities);
 
         } catch (Exception e) {
             //e.printStackTrace();
@@ -1556,11 +1567,11 @@ for(String sentence : allSentences) {
                                                                           boolean disambiguate) {
 
         Pair<List<List<Dataset>>, List<BibDataSet>> tei = null;
-        try {
+        try (StringReader reader = new StringReader(documentAsString);){
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
             DocumentBuilder builder = factory.newDocumentBuilder();
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(documentAsString)));
+            org.w3c.dom.Document document = builder.parse(new InputSource(reader));
             //document.getDocumentElement().normalize();
             org.w3c.dom.Element root = document.getDocumentElement();
             if (segmentSentences)
@@ -2197,7 +2208,7 @@ for(String sentence : allSentences) {
             }
         }
 
-        if (StringUtils.isNotBlank(datastetConfiguration.getGluttonHost())) {
+        if (StringUtils.isNotBlank(datastetConfiguration.getDatastetConfiguration().getGluttonHost())) {
             try {
                 Consolidation consolidator = Consolidation.getInstance();
                 Map<Integer, BiblioItem> resConsolidation = consolidator.consolidate(citationsToConsolidate);
@@ -2242,7 +2253,7 @@ for(String sentence : allSentences) {
 
         // mark datasets present in Data Availability section(s)
         if (CollectionUtils.isNotEmpty(availabilitySequences)) {
-            List<LayoutToken> availabilityTokens = availabilitySequences.stream().flatMap(as -> as.getTokens().stream()).toList();
+            List<LayoutToken> availabilityTokens = availabilitySequences.stream().flatMap(as -> as.getTokens().stream()).collect(Collectors.toList());
             entities = markDAS(entities, availabilityTokens);
         }
 

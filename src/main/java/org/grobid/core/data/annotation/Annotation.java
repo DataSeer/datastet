@@ -1,18 +1,15 @@
-package org.grobid.trainer;
+package org.grobid.core.data.annotation;
 
-import java.util.*;
-
-import org.grobid.core.layout.LayoutToken;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.grobid.core.utilities.OffsetPosition;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
- * 
- * POJO for generic annotation used for mixed content XML serialization. 
+ * POJO for generic annotation used for mixed content XML serialization.
  *
  * @author Patrice
  */
@@ -33,24 +30,24 @@ public class Annotation implements Comparable<Annotation> {
     private String datasetId = null;
 
     /**
-     *  Storing attribute value pairs, only one value per attribute.
+     * Storing attribute value pairs, only one value per attribute.
      */
     private Map<String, String> attributes = null;
 
     /**
-     *  Offset relatively of sequence of LayoutToken
+     * Offset relatively of sequence of LayoutToken
      */
     public OffsetPosition getOccurence() {
         return this.occurence;
     }
 
     /**
-     *  Offset relatively of sequence of LayoutToken
+     * Offset relatively of sequence of LayoutToken
      */
     public void setOccurence(OffsetPosition occurence) {
         this.occurence = occurence;
     }
-    
+
     public Map<String, String> getAttributes() {
         return attributes;
     }
@@ -106,9 +103,9 @@ public class Annotation implements Comparable<Annotation> {
                 return 1;
             else if (pos.end == this.occurence.end)
                 return 0;
-            else 
+            else
                 return -1;
-        } else 
+        } else
             return -1;
     }
 }

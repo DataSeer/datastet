@@ -1,47 +1,43 @@
 package org.grobid.core.data;
 
-import org.grobid.core.engines.label.TaggingLabel;
-import org.grobid.core.utilities.TextUtilities;
-import org.grobid.core.utilities.OffsetPosition;
-import org.grobid.core.lexicon.DatastetLexicon;
-import org.grobid.core.layout.BoundingBox;
-import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.data.Dataset.DatasetType;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.grobid.core.data.Dataset.DatasetType;
+import org.grobid.core.engines.label.TaggingLabel;
+import org.grobid.core.layout.BoundingBox;
+import org.grobid.core.layout.LayoutToken;
+import org.grobid.core.utilities.OffsetPosition;
+import org.grobid.core.utilities.TextUtilities;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
- *  Representation of a mention of a component corresponding to a dataset description.
- *
+ * Representation of a mention of a component corresponding to a dataset description.
  */
-public class DatasetComponent extends KnowledgeEntity implements Comparable<DatasetComponent> {   
+public class DatasetComponent extends KnowledgeEntity implements Comparable<DatasetComponent> {
     private static final Logger logger = LoggerFactory.getLogger(DatasetComponent.class);
 
     // surface form of the component as it appears in the source document
     protected String rawForm = null;
-    
+
     // list of layout tokens corresponding to the component mention in the source document
     protected List<LayoutToken> tokens = null;
-    
+
     // normalized form of the component
     protected String normalizedForm = null;
-    
+
     // relative offset positions in context, if defined and expressed as (Java) character offset
     protected OffsetPosition offsets = null;
-    
+
     // confidence score of the component in context, if defined
     protected double conf = 0.8;
-    
+
     // optional bounding box in the source document
     protected List<BoundingBox> boundingBoxes = null;
-    
+
     // language
     protected String lang = null;
 
@@ -68,7 +64,7 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public DatasetComponent() {
         this.offsets = new OffsetPosition();
     }
-    
+
     public DatasetComponent(String rawForm) {
         this.rawForm = rawForm;
         this.normalizedForm = normalizeRawForm(rawForm);
@@ -99,7 +95,7 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public String getRawForm() {
         return rawForm;
     }
-    
+
     public void setRawForm(String raw) {
         this.rawForm = raw;
         this.normalizedForm = normalizeRawForm(raw);
@@ -108,7 +104,7 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public String getNormalizedForm() {
         return normalizedForm;
     }
-    
+
     public void setNormalizedForm(String normalized) {
         this.normalizedForm = normalizeRawForm(normalized);
     }
@@ -116,11 +112,11 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public OffsetPosition getOffsets() {
         return offsets;
     }
-    
+
     public void setOffsets(OffsetPosition offsets) {
         this.offsets = offsets;
     }
-    
+
     public void setOffsetStart(int start) {
         offsets.start = start;
     }
@@ -136,15 +132,15 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public int getOffsetEnd() {
         return offsets.end;
     }
-    
+
     public double getConf() {
         return this.conf;
     }
-    
+
     public void setConf(double conf) {
         this.conf = conf;
     }
-    
+
     public List<BoundingBox> getBoundingBoxes() {
         return boundingBoxes;
     }
@@ -152,15 +148,15 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public void setBoundingBoxes(List<BoundingBox> boundingBoxes) {
         this.boundingBoxes = boundingBoxes;
     }
-    
+
     public List<LayoutToken> getTokens() {
         return this.tokens;
     }
-    
+
     public void setTokens(List<LayoutToken> tokens) {
         this.tokens = tokens;
     }
-    
+
     public TaggingLabel getLabel() {
         return label;
     }
@@ -187,8 +183,8 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
 
     public void setFiltered(boolean filtered) {
         this.filtered = filtered;
-    } 
-    
+    }
+
     public DatasetType getType() {
         return this.type;
     }
@@ -202,7 +198,7 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     }
 
     public void setBestDataType(String dataType) {
-        this.bestDataType= dataType;
+        this.bestDataType = dataType;
     }
 
     public double getBestDataTypeScore() {
@@ -226,7 +222,7 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     }
 
     public void setDestination(String destination) {
-        this.destination= destination;
+        this.destination = destination;
     }
 
     protected String bestType = null;
@@ -234,10 +230,10 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     @Override
     public boolean equals(Object object) {
         boolean result = false;
-        if ( (object != null) && object instanceof DatasetComponent) {
-            int start = ((DatasetComponent)object).getOffsetStart();
-            int end = ((DatasetComponent)object).getOffsetEnd();
-            if ( (start == offsets.start) && (end == offsets.end) ) {
+        if ((object != null) && object instanceof DatasetComponent) {
+            int start = ((DatasetComponent) object).getOffsetStart();
+            int end = ((DatasetComponent) object).getOffsetEnd();
+            if ((start == offsets.start) && (end == offsets.end)) {
                 result = true;
             }
         }
@@ -248,16 +244,16 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     public int compareTo(DatasetComponent theEntity) {
         int start = theEntity.getOffsetStart();
         int end = theEntity.getOffsetEnd();
-        
-        if (offsets.start != start) 
+
+        if (offsets.start != start)
             return offsets.start - start;
-        else 
+        else
             return offsets.end - end;
     }
-    
+
     public String toJson() {
         ObjectMapper mapper = new ObjectMapper();
-        
+
         StringBuffer buffer = new StringBuffer();
         buffer.append("{ ");
         try {
@@ -289,18 +285,18 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
 
         if (offsets != null) {
             buffer.append(", \"offsetStart\" : " + offsets.start);
-            buffer.append(", \"offsetEnd\" : " + offsets.end);  
+            buffer.append(", \"offsetEnd\" : " + offsets.end);
         }
-        
-        if (bestDataType != null) { 
+
+        if (bestDataType != null) {
             buffer.append(", \"bestDataType\": \"" + bestDataType + "\"");
             buffer.append(", \"bestTypeScore\": " + TextUtilities.formatFourDecimals(bestDataTypeScore));
             buffer.append(", \"hasDataset\": " + hasDatasetScore);
         }
 
         //buffer.append(", \"conf\" : \"" + conf + "\"");
-        
-        if ( (boundingBoxes != null) && (boundingBoxes.size() > 0) ) {
+
+        if ((boundingBoxes != null) && (boundingBoxes.size() > 0)) {
             buffer.append(", \"boundingBoxes\" : [");
             boolean first = true;
             for (BoundingBox box : boundingBoxes) {
@@ -312,11 +308,11 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
             }
             buffer.append("] ");
         }
-        
+
         buffer.append(" }");
         return buffer.toString();
     }
-    
+
     public String toString() {
         StringBuffer buffer = new StringBuffer();
         if (rawForm != null) {
@@ -335,8 +331,8 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
             buffer.append(offsets.toString() + "\t");
         }
 
-        if ( (boundingBoxes != null) && (boundingBoxes.size()>0) ) {
-            for(BoundingBox box : boundingBoxes) {
+        if ((boundingBoxes != null) && (boundingBoxes.size() > 0)) {
+            for (BoundingBox box : boundingBoxes) {
                 buffer.append(box.toString() + "\t");
             }
         }
@@ -345,7 +341,7 @@ public class DatasetComponent extends KnowledgeEntity implements Comparable<Data
     }
 
     /**
-     * This is a string normalization process adapted to the dataset 
+     * This is a string normalization process adapted to the dataset
      * attribute strings
      */
     private static String normalizeRawForm(String raw) {

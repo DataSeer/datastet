@@ -1,32 +1,29 @@
-package org.grobid.trainer;
+package org.grobid.trainer.sax;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.grobid.core.analyzers.DatastetAnalyzer;
-import org.grobid.core.exceptions.GrobidException;
-import org.grobid.core.utilities.Pair;
 import org.grobid.core.engines.DataseerClassifier;
+import org.grobid.core.exceptions.GrobidException;
 import org.grobid.core.layout.LayoutToken;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.util.*;
-
-import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.node.*;
-import com.fasterxml.jackson.annotation.*;
-import com.fasterxml.jackson.core.io.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * SAX handler for TEI-style annotations. 
+ * SAX handler for TEI-style annotations.
  * Dataseer relevant sections are marked at <div> level.
  * Dataseer sentence classification are sentence-level inline annotations <s>.
  * If any, Dataseer entities are inline annotations <rs>.
- *
- * Basically we consider <div> <head> <p> <s> tags in the training corpus. 
- * <head> and <p> are the unit to be labeled. <s> within <p> are classified by the current 
- * Dataseer sentence classifier and used as feature for the <p> level. 
- * <head> content is not classified. 
+ * <p>
+ * Basically we consider <div> <head> <p> <s> tags in the training corpus.
+ * <head> and <p> are the unit to be labeled. <s> within <p> are classified by the current
+ * Dataseer sentence classifier and used as feature for the <p> level.
+ * <head> content is not classified.
  *
  * @author Patrice
  */
@@ -164,7 +161,7 @@ public class DataseerAnnotationSaxHandler extends DefaultHandler {
                 }
                 accumulator.setLength(0);
             }*/
-            
+
         } catch (Exception e) {
 //		    e.printStackTrace();
             throw new GrobidException("An exception occured while running Grobid.", e);
@@ -175,9 +172,9 @@ public class DataseerAnnotationSaxHandler extends DefaultHandler {
         if (currentTag == null)
             currentTag = "<other>";
         if ((qName.equals("head")) ||
-                (qName.equals("paragraph")) || (qName.equals("p")) 
-                //|| (qName.equals("div"))
-                ) {
+                (qName.equals("paragraph")) || (qName.equals("p"))
+            //|| (qName.equals("div"))
+        ) {
 //System.out.println(qName);
             if (currentTag == null) {
                 return;
@@ -219,7 +216,7 @@ public class DataseerAnnotationSaxHandler extends DefaultHandler {
                                     JsonNode noDatasetNode = classificationNode.findPath("no_dataset");
 
                                     if ((datasetNode != null) && (!datasetNode.isMissingNode()) &&
-                                        (noDatasetNode != null) && (!noDatasetNode.isMissingNode()) ) {
+                                            (noDatasetNode != null) && (!noDatasetNode.isMissingNode())) {
                                         double probDataset = datasetNode.asDouble();
                                         double probNoDataset = noDatasetNode.asDouble();
 
@@ -237,8 +234,8 @@ public class DataseerAnnotationSaxHandler extends DefaultHandler {
                         }
 
                         // most frequent dataset type, if any
-                        
-                    } catch(Exception e) {
+
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }

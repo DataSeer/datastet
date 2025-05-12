@@ -3,7 +3,8 @@ package org.grobid.core.engines;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -15,6 +16,8 @@ import org.grobid.core.factory.GrobidFactory;
 import org.grobid.core.jni.DeLFTClassifierModel;
 import org.grobid.core.utilities.*;
 import org.grobid.core.utilities.GrobidConfig.ModelParameters;
+import org.grobid.service.configuration.DatastetConfiguration;
+import org.grobid.service.configuration.DatastetServiceConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Element;
@@ -46,60 +49,50 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  *
  * @author Patrice
  */
+@Singleton
 public class DataseerClassifier {
     private static final Logger logger = LoggerFactory.getLogger(DataseerClassifier.class);
 
     private static volatile DataseerClassifier instance;
 
-    // components for sentence segmentation
-    //private SentenceDetectorME detector = null;
-    //private static String openNLPModelFile = "resources/openNLP/en-sent.bin";
-
-    private static Engine engine = null; 
+    private static Engine engine = null;
 
     private static List<String> textualElements = Arrays.asList("p", "figDesc");
     //private static List<String> textualElements = Arrays.asList("p");
-
-    // map of classification models (binay, first-level, etc.)
-    private Map<String,DeLFTClassifierModel> models = null;
 
     private DeLFTClassifierModel classifierBinary = null;
     private DeLFTClassifierModel classifierFirstLevel = null;
     private DeLFTClassifierModel classifierReuse = null;
 
-    private DatastetConfiguration datastetConfiguration = null;
+    private DatastetServiceConfiguration datastetServiceConfiguration;
+    private DatastetConfiguration datastetConfiguration;
 
-    public static DataseerClassifier getInstance() {
+
+    public static DataseerClassifier getInstance(DatastetConfiguration configuration) {
         if (instance == null) {
-            getNewInstance();
+            synchronized (DataseerClassifier.class) {
+                if (instance == null) {
+                    instance = new DataseerClassifier(configuration);
+                }
+            }
         }
         return instance;
     }
 
-    /**
-     * Create a new instance.
-     */
-    private static synchronized void getNewInstance() {
-        instance = new DataseerClassifier();
+    @Inject
+    public DataseerClassifier(DatastetServiceConfiguration configuration) {
+        this(configuration.getDatastetConfiguration());
+        this.datastetServiceConfiguration = configuration;
     }
 
-    private DataseerClassifier() {
+    public DataseerClassifier(DatastetConfiguration configuration) {
+        this.datastetConfiguration = configuration;
         try {
-            this.datastetConfiguration = null;
-            try {
-                ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-
-                File configFile = new File("resources/config/config.yml").getAbsoluteFile();
-                datastetConfiguration = mapper.readValue(configFile, DatastetConfiguration.class);
-            } catch(Exception e) {
-                logger.error("The config file does not appear valid, see resources/config/config.yml", e);
-            }
-
             // grobid
             engine = GrobidFactory.getInstance().createEngine();
 
             // Datatype classifier via DeLFT
-            for(ModelParameters parameter : datastetConfiguration.getModels()) {
+            for (ModelParameters parameter : configuration.getModels()) {
                 if (parameter.name.equals("dataseer-binary")) {
                     this.classifierBinary = new DeLFTClassifierModel("dataseer-binary", parameter.delft.architecture);
                 } else if (parameter.name.equals("dataseer-first")) {
@@ -115,11 +108,12 @@ public class DataseerClassifier {
     }
 
     public DatastetConfiguration getDatastetConfiguration() {
-        return this.datastetConfiguration;
+        return this.datastetServiceConfiguration.getDatastetConfiguration();
     }
 
     /**
      * Classify a simple piece of text
+     *
      * @return JSON string
      */
     public String classify(String text) throws Exception {
@@ -132,6 +126,7 @@ public class DataseerClassifier {
 
     /**
      * Classify a simple piece of text whether it refers to some dataset or not
+     *
      * @return JSON string
      */
     public String classifyBinary(String text) throws Exception {
@@ -144,6 +139,7 @@ public class DataseerClassifier {
 
     /**
      * Classify a simple piece of text for the data type of a referenced dataset
+     *
      * @return JSON string
      */
     public String classifyFirstLevel(String text) throws Exception {
@@ -156,6 +152,7 @@ public class DataseerClassifier {
 
     /**
      * Classify an array of texts
+     *
      * @return JSON string
      */
     public String classify(List<String> texts) throws Exception {
@@ -180,7 +177,7 @@ public class DataseerClassifier {
                     JsonNode noDatasetNode = classificationNode.findPath("no_dataset");
 
                     if ((datasetNode != null) && (!datasetNode.isMissingNode()) &&
-                        (noDatasetNode != null) && (!noDatasetNode.isMissingNode()) ) {
+                            (noDatasetNode != null) && (!noDatasetNode.isMissingNode())) {
                         double probDataset = datasetNode.asDouble();
                         double probNoDataset = noDatasetNode.asDouble();
 
@@ -188,11 +185,11 @@ public class DataseerClassifier {
                         if (probDataset > probNoDataset) {
                             JsonNode textNode = classificationNode.findPath("text");
                             cascaded_texts.add(textNode.asText());
-                        } 
+                        }
 
                         // rename "dataset" attribute to avoid confusion with "Dataset" type of the taxonomy
-                        ((ObjectNode)classificationNode).put("has_dataset", probDataset);
-                        ((ObjectNode)classificationNode).remove("dataset");
+                        ((ObjectNode) classificationNode).put("has_dataset", probDataset);
+                        ((ObjectNode) classificationNode).remove("dataset");
                     }
                 }
             }
@@ -220,8 +217,8 @@ public class DataseerClassifier {
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.append("{\n\t\"model\": \"dataseer\",\n\t\"software\": \"DeLFT\",\n\t\"date\": \"" + 
-            DatastetUtilities.getISO8601Date() + "\",\n\t\"classifications\": [");
+        builder.append("{\n\t\"model\": \"dataseer\",\n\t\"software\": \"DeLFT\",\n\t\"date\": \"" +
+                DatastetUtilities.getISO8601Date() + "\",\n\t\"classifications\": [");
 
         boolean first = true;
         // second pass to inject additional results
@@ -229,9 +226,9 @@ public class DataseerClassifier {
             JsonNode classificationsNode = root.findPath("classifications");
             JsonNode classificationsCascadedNode = rootCascaded.findPath("classifications");
             JsonNode classificationsReuseCascadedNode = rootReuseCascaded.findPath("classifications");
-            if ((classificationsNode != null) && (!classificationsNode.isMissingNode()) && 
-                (classificationsCascadedNode != null) && (!classificationsCascadedNode.isMissingNode()) &&
-                (classificationsReuseCascadedNode != null) && (!classificationsReuseCascadedNode.isMissingNode())) {
+            if ((classificationsNode != null) && (!classificationsNode.isMissingNode()) &&
+                    (classificationsCascadedNode != null) && (!classificationsCascadedNode.isMissingNode()) &&
+                    (classificationsReuseCascadedNode != null) && (!classificationsReuseCascadedNode.isMissingNode())) {
                 Iterator<JsonNode> ite = classificationsNode.elements();
                 Iterator<JsonNode> iteCascaded = classificationsCascadedNode.elements();
                 Iterator<JsonNode> iteReuseCascaded = classificationsReuseCascadedNode.elements();
@@ -241,7 +238,7 @@ public class DataseerClassifier {
                     JsonNode noDatasetNode = classificationNode.findPath("no_dataset");
 
                     if ((datasetNode != null) && (!datasetNode.isMissingNode()) &&
-                        (noDatasetNode != null) && (!noDatasetNode.isMissingNode()) ) {
+                            (noDatasetNode != null) && (!noDatasetNode.isMissingNode())) {
                         double probDataset = datasetNode.asDouble();
                         double probNoDataset = noDatasetNode.asDouble();
 
@@ -251,8 +248,8 @@ public class DataseerClassifier {
                             if (iteCascaded.hasNext()) {
                                 JsonNode classificationCascadedNode = iteCascaded.next();
                                 // inject dataset/no_dataset probabilities as extra-information relevant for post--processing
-                                ((ObjectNode)classificationCascadedNode).put("has_dataset", probDataset);
-                                ((ObjectNode)classificationCascadedNode).put("no_dataset", probNoDataset);
+                                ((ObjectNode) classificationCascadedNode).put("has_dataset", probDataset);
+                                ((ObjectNode) classificationCascadedNode).put("no_dataset", probNoDataset);
 
                                 if (iteReuseCascaded.hasNext()) {
                                     JsonNode classificationReuseCascadedNode = iteReuseCascaded.next();
@@ -260,14 +257,14 @@ public class DataseerClassifier {
                                     JsonNode noReuseNode = classificationReuseCascadedNode.findPath("not_reuse");
 
                                     if ((reuseNode != null) && (!reuseNode.isMissingNode()) &&
-                                        (noReuseNode != null) && (!noReuseNode.isMissingNode()) ) {
+                                            (noReuseNode != null) && (!noReuseNode.isMissingNode())) {
                                         double probReuse = reuseNode.asDouble();
                                         double probNoReuse = noReuseNode.asDouble();
 
                                         if (probReuse > probNoReuse) {
-                                            ((ObjectNode)classificationCascadedNode).put("reuse", true);
+                                            ((ObjectNode) classificationCascadedNode).put("reuse", true);
                                         } else {
-                                            ((ObjectNode)classificationCascadedNode).put("reuse", false);
+                                            ((ObjectNode) classificationCascadedNode).put("reuse", false);
                                         }
                                     }
                                 }
@@ -298,13 +295,13 @@ public class DataseerClassifier {
             // final beautifier
             String finalJson = builder.toString();
             return prettyPrintJsonString(finalJson, mapper);
-        }
-        else
+        } else
             return null;
     }
 
     /**
      * Classify a simple piece of text whether it refers to some dataset or not
+     *
      * @return JSON string
      */
     public String classifyBinary(List<String> texts) throws Exception {
@@ -328,7 +325,7 @@ public class DataseerClassifier {
                     JsonNode noDatasetNode = classificationNode.findPath("no_dataset");
 
                     if ((datasetNode != null) && (!datasetNode.isMissingNode()) &&
-                        (noDatasetNode != null) && (!noDatasetNode.isMissingNode()) ) {
+                            (noDatasetNode != null) && (!noDatasetNode.isMissingNode())) {
                         double probDataset = datasetNode.asDouble();
                         double probNoDataset = noDatasetNode.asDouble();
 
@@ -336,11 +333,11 @@ public class DataseerClassifier {
                         if (probDataset > probNoDataset) {
                             JsonNode textNode = classificationNode.findPath("text");
                             //cascaded_texts.add(textNode.asText());
-                        } 
+                        }
 
                         // rename "dataset" attribute to avoid confusion with "Dataset" type of the taxonomy
-                        ((ObjectNode)classificationNode).put("has_dataset", probDataset);
-                        ((ObjectNode)classificationNode).remove("dataset");
+                        ((ObjectNode) classificationNode).put("has_dataset", probDataset);
+                        ((ObjectNode) classificationNode).remove("dataset");
                     }
                 }
             }
@@ -351,6 +348,7 @@ public class DataseerClassifier {
 
     /**
      * Classify a simple piece of text for the data type of a referenced dataset
+     *
      * @return JSON string
      */
     public String classifyFirstLevel(List<String> texts) throws Exception {
@@ -364,7 +362,8 @@ public class DataseerClassifier {
         if (cascaded_json != null && cascaded_json.length() > 0)
             rootCascaded = mapper.readTree(cascaded_json);
 
-        String finalJson = this.shadowModelName(cascaded_json);;
+        String finalJson = this.shadowModelName(cascaded_json);
+        ;
         return prettyPrintJsonString(finalJson, mapper);
     }
 
@@ -373,7 +372,7 @@ public class DataseerClassifier {
             return the_json;
         the_json = the_json.replace("\"model\": \"dataseer-binary\",", "\"model\": \"dataseer\",");
         return the_json.replace("\"model\": \"dataseer-first\",", "\"model\": \"dataseer\",");
-    } 
+    }
 
     public String prettyPrintJsonNode(JsonNode jsonNode, ObjectMapper mapper) {
         if (jsonNode == null || jsonNode.isMissingNode())
@@ -399,6 +398,7 @@ public class DataseerClassifier {
 
     /**
      * Enrich a TEI document with Dataseer information
+     *
      * @return enriched TEI string
      */
     public String processTEIString(String xmlString, boolean segmentSentences) throws Exception {
@@ -406,19 +406,22 @@ public class DataseerClassifier {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();           
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(xmlString)));
-            //document.getDocumentElement().normalize();
-            tei = processTEIDocument(document, segmentSentences);
-        } catch(ParserConfigurationException | IOException e) {
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            try (StringReader reader = new StringReader(xmlString)) {
+                org.w3c.dom.Document document = builder.parse(new InputSource(reader));
+                //document.getDocumentElement().normalize();
+                tei = processTEIDocument(document, segmentSentences);
+            }
+        } catch (ParserConfigurationException | IOException e) {
             e.printStackTrace();
         }
         return tei;
     }
-    
+
 
     /**
      * Enrich a TEI document with Dataseer information
+     *
      * @return enriched TEI string
      */
     public String processTEI(String filePath, boolean segmentSentences, boolean avoidDomParserBug) throws Exception {
@@ -431,13 +434,14 @@ public class DataseerClassifier {
             if (avoidDomParserBug)
                 tei = avoidDomParserAttributeBug(tei);
 
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(tei)));
-            //document.getDocumentElement().normalize();
-            tei = processTEIDocument(document, segmentSentences);
-            if (avoidDomParserBug)
-                tei = restoreDomParserAttributeBug(tei); 
-
-        } catch(ParserConfigurationException | IOException e) {
+            try (StringReader reader = new StringReader(tei)) {
+                org.w3c.dom.Document document = builder.parse(new InputSource(reader));
+                //document.getDocumentElement().normalize();
+                tei = processTEIDocument(document, segmentSentences);
+                if (avoidDomParserBug)
+                    tei = restoreDomParserAttributeBug(tei);
+            }
+        } catch (ParserConfigurationException | IOException e) {
             e.printStackTrace();
         }
         return tei;
@@ -445,6 +449,7 @@ public class DataseerClassifier {
 
     /**
      * Enrich a TEI document with Dataseer information
+     *
      * @return enriched TEI string
      */
     public String processTEIDocument(org.w3c.dom.Document document, boolean segmentSentences) throws Exception {
@@ -460,9 +465,9 @@ public class DataseerClassifier {
 
     /**
      * Process a JATS document and enrich with Dataseer information as a TEI document.
-     * Transformation of the JATS/NLM document is realised thanks to Pub2TEI 
-     * (https://github.com/kermitt2/pub2tei) 
-     * 
+     * Transformation of the JATS/NLM document is realised thanks to Pub2TEI
+     * (https://github.com/kermitt2/pub2tei)
+     *
      * @return enriched TEI string
      */
     public String processJATS(String filePath) throws Exception {
@@ -473,10 +478,11 @@ public class DataseerClassifier {
         String tei = null;
         String newFilePath = null;
         try {
-            File tmpFile = GrobidProperties.getInstance().getTempPath();
-            newFilePath = ArticleUtilities.applyPub2TEI(filePath, 
-                tmpFile.getPath() + "/" + fileName.replace(".xml", ".tei.xml"), 
-                this.datastetConfiguration.getPub2TEIPath());
+            GrobidProperties.getInstance();
+            File tmpFile = GrobidProperties.getTempPath();
+            newFilePath = ArticleUtilities.applyPub2TEI(filePath,
+                    tmpFile.getPath() + "/" + fileName.replace(".xml", ".tei.xml"),
+                    this.datastetConfiguration.getPub2TEIPath());
             //System.out.println(newFilePath);
 
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -486,13 +492,14 @@ public class DataseerClassifier {
             //if (avoidDomParserBug)
             //    tei = avoidDomParserAttributeBug(tei);
 
-            org.w3c.dom.Document document = builder.parse(new InputSource(new StringReader(tei)));
-            //document.getDocumentElement().normalize();
-            tei = processTEIDocument(document, true);
-            //if (avoidDomParserBug)
-            //    tei = restoreDomParserAttributeBug(tei); 
-
-        } catch(ParserConfigurationException | IOException e) {
+            try (StringReader reader = new StringReader(tei)) {
+                org.w3c.dom.Document document = builder.parse(new InputSource(reader));
+                //document.getDocumentElement().normalize();
+                tei = processTEIDocument(document, true);
+                //if (avoidDomParserBug)
+                //    tei = restoreDomParserAttributeBug(tei); 
+            }
+        } catch (ParserConfigurationException | IOException e) {
             e.printStackTrace();
         } finally {
             if (newFilePath != null) {
@@ -507,13 +514,13 @@ public class DataseerClassifier {
         final NodeList children = node.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             final Node n = children.item(i);
-            if ( (n.getNodeType() == Node.ELEMENT_NODE) && 
-                 (textualElements.contains(n.getNodeName())) ) {
+            if ((n.getNodeType() == Node.ELEMENT_NODE) &&
+                    (textualElements.contains(n.getNodeName()))) {
                 // text content
                 //String text = n.getTextContent();
                 StringBuffer textBuffer = new StringBuffer();
                 NodeList childNodes = n.getChildNodes();
-                for(int y=0; y<childNodes.getLength(); y++) {
+                for (int y = 0; y < childNodes.getLength(); y++) {
                     textBuffer.append(serialize(doc, childNodes.item(y)));
                     textBuffer.append(" ");
                 }
@@ -524,13 +531,13 @@ public class DataseerClassifier {
                 // we're making a first pass to ensure that there is no element broken by the segmentation
                 List<String> sentences = new ArrayList<String>();
                 List<String> toConcatenate = new ArrayList<String>();
-                for(OffsetPosition sentPos : theSentenceBoundaries) {
+                for (OffsetPosition sentPos : theSentenceBoundaries) {
                     //System.out.println("new chunk: " + sent);
                     String sent = text.substring(sentPos.start, sentPos.end);
                     String newSent = sent;
                     if (toConcatenate.size() != 0) {
                         StringBuffer conc = new StringBuffer();
-                        for(String concat : toConcatenate) {
+                        for (String concat : toConcatenate) {
                             conc.append(concat);
                             conc.append(" ");
                         }
@@ -538,11 +545,11 @@ public class DataseerClassifier {
                     }
                     String fullSent = "<s xmlns=\"http://www.tei-c.org/ns/1.0\">" + newSent + "</s>";
                     boolean fail = false;
-                    try {
+                    try (StringReader reader = new StringReader(fullSent)) {
                         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
                         factory.setNamespaceAware(true);
-                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(new StringReader(fullSent)));                
-                    } catch(Exception e) {
+                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(reader));
+                    } catch (Exception e) {
                         fail = true;
                     }
                     if (fail)
@@ -554,27 +561,27 @@ public class DataseerClassifier {
                 }
 
                 List<Node> newNodes = new ArrayList<Node>();
-                for(String sent : sentences) {
+                for (String sent : sentences) {
                     //System.out.println("-----------------");
                     sent = sent.replace("\n", " ");
                     sent = sent.replaceAll("( )+", " ");
-                
+
                     //Element sentenceElement = doc.createElement("s");                        
                     //sentenceElement.setTextContent(sent);
                     //newNodes.add(sentenceElement);
 
                     //System.out.println(sent);  
 
-                    try {
+                    try (StringReader reader = new StringReader(sent)) {
                         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
                         factory.setNamespaceAware(true);
-                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(new StringReader(sent)));
+                        org.w3c.dom.Document d = factory.newDocumentBuilder().parse(new InputSource(reader));
                         //d.getDocumentElement().normalize();
                         Node newNode = doc.importNode(d.getDocumentElement(), true);
                         newNodes.add(newNode);
                         //System.out.println(serialize(doc, newNode));
-                    } catch(Exception e) {
-
+                    } catch (Exception e) {
+                        // Ignore exception
                     }
                 }
 
@@ -588,12 +595,12 @@ public class DataseerClassifier {
                 if (n.getNodeName().equals("figDesc")) {
                     Element theDiv = doc.createElementNS("http://www.tei-c.org/ns/1.0", "div");
                     Element theP = doc.createElementNS("http://www.tei-c.org/ns/1.0", "p");
-                    for(Node theNode : newNodes) 
+                    for (Node theNode : newNodes)
                         theP.appendChild(theNode);
                     theDiv.appendChild(theP);
                     n.appendChild(theDiv);
                 } else {
-                    for(Node theNode : newNodes) 
+                    for (Node theNode : newNodes)
                         n.appendChild(theNode);
                 }
 
@@ -611,11 +618,11 @@ public class DataseerClassifier {
         List<Boolean> relevantSections = null;
         List<String> segments = new ArrayList<String>();
         List<String> sectionTypes = new ArrayList<String>();
-        List<Integer> nbDatasets =new ArrayList<Integer>();
+        List<Integer> nbDatasets = new ArrayList<Integer>();
         List<String> datasetTypes = new ArrayList<String>();
 
         // map dataset id to its data type and data subtype
-        Map<String, Pair<String,String>> datasetMap = new TreeMap<>();
+        Map<String, Pair<String, String>> datasetMap = new TreeMap<>();
 
         // map a dataInstance id to its dataset id
         Map<String, String> dataInstanceMap = new TreeMap<>();
@@ -631,7 +638,7 @@ public class DataseerClassifier {
         for (int i = 0; i < sentenceList.getLength(); i++) {
             Element sentenceElement = (Element) sentenceList.item(i);
             if (!sentenceElement.hasAttribute("xml:id"))
-                sentenceElement.setAttribute("xml:id", "sentence-"+i);
+                sentenceElement.setAttribute("xml:id", "sentence-" + i);
         }
 
         NodeList sectionList = doc.getElementsByTagName("div");
@@ -649,7 +656,7 @@ public class DataseerClassifier {
             Element headElement = this.getFirstDirectChild(sectionElement, "head");
             if (headElement != null) {
                 String localTextContent = headElement.getTextContent();
-                if (localTextContent == null || localTextContent.length() == 0) 
+                if (localTextContent == null || localTextContent.length() == 0)
                     continue;
 
                 segments.add(localTextContent);
@@ -659,20 +666,20 @@ public class DataseerClassifier {
             }
 
             // the <p> elements under <div> only, and ignoring <abstract>
-            for(Node child = sectionElement.getFirstChild(); child != null; child = child.getNextSibling()) {
+            for (Node child = sectionElement.getFirstChild(); child != null; child = child.getNextSibling()) {
                 if (child instanceof Element && "p".equals(child.getNodeName())) {
-                    Element childElement = (Element)child;
+                    Element childElement = (Element) child;
                     String localTextContent = childElement.getTextContent();
-                    if (localTextContent == null || localTextContent.length() == 0) 
+                    if (localTextContent == null || localTextContent.length() == 0)
                         continue;
                     segments.add(localTextContent);
                     sectionTypes.add("p");
 
                     // get the sentences elements
                     List<String> localSentences = new ArrayList<String>();
-                    for(Node subchild = childElement.getFirstChild(); subchild != null; subchild = subchild.getNextSibling()) {
+                    for (Node subchild = childElement.getFirstChild(); subchild != null; subchild = subchild.getNextSibling()) {
                         if (subchild instanceof Element && "s".equals(subchild.getNodeName())) {
-                            Element subchildElement = (Element)subchild;
+                            Element subchildElement = (Element) subchild;
                             localSentences.add(subchildElement.getTextContent());
                         }
                     }
@@ -696,7 +703,7 @@ public class DataseerClassifier {
 
                                     Boolean localResult = Boolean.valueOf(false);
                                     if ((datasetNode != null) && (!datasetNode.isMissingNode()) &&
-                                        (noDatasetNode != null) && (!noDatasetNode.isMissingNode()) ) {
+                                            (noDatasetNode != null) && (!noDatasetNode.isMissingNode())) {
                                         double probDataset = datasetNode.asDouble();
                                         double probNoDataset = noDatasetNode.asDouble();
 
@@ -710,7 +717,7 @@ public class DataseerClassifier {
                                 }
                             }
                         }
-                    } catch(Exception e) {
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
 
@@ -740,18 +747,18 @@ public class DataseerClassifier {
             Element headElement = this.getFirstDirectChild(sectionElement, "head");
             if (headElement != null) {
                 String localTextContent = headElement.getTextContent();
-                if (localTextContent == null || localTextContent.length() == 0) 
+                if (localTextContent == null || localTextContent.length() == 0)
                     continue;
                 relevantSection = relevantSections.get(relevantSectionIndex);
                 relevantSectionIndex++;
             }
 
             // the <p> elements 
-            for(Node child = sectionElement.getFirstChild(); child != null; child = child.getNextSibling()) {
+            for (Node child = sectionElement.getFirstChild(); child != null; child = child.getNextSibling()) {
                 if (child instanceof Element && "p".equals(child.getNodeName())) {
-                    Element childElement = (Element)child;
+                    Element childElement = (Element) child;
                     String localTextContent = childElement.getTextContent();
-                    if (localTextContent == null || localTextContent.length() == 0) 
+                    if (localTextContent == null || localTextContent.length() == 0)
                         continue;
                     boolean localRelevantSection = relevantSections.get(relevantSectionIndex);
                     if (localRelevantSection)
@@ -766,14 +773,14 @@ public class DataseerClassifier {
 
             // if we consider this section, we get back the classification of the sentences present in it and
             // update the <div> level accordingly
-            for(Node child = sectionElement.getFirstChild(); child != null; child = child.getNextSibling()) {
+            for (Node child = sectionElement.getFirstChild(); child != null; child = child.getNextSibling()) {
                 if (child instanceof Element && "p".equals(child.getNodeName())) {
-                    Element childElement = (Element)child;
+                    Element childElement = (Element) child;
                     // get the sentences elements
-                    for(Node subchild = childElement.getFirstChild(); subchild != null; subchild = subchild.getNextSibling()) {
+                    for (Node subchild = childElement.getFirstChild(); subchild != null; subchild = subchild.getNextSibling()) {
                         if (subchild instanceof Element && "s".equals(subchild.getNodeName())) {
-                            Element subchildElement = (Element)subchild;
-                            
+                            Element subchildElement = (Element) subchild;
+
                             String localSentence = subchildElement.getTextContent();
                             JsonNode classificationNode = mapSentenceJsonResult.get(localSentence);
 
@@ -782,7 +789,7 @@ public class DataseerClassifier {
                                 JsonNode noDatasetNode = classificationNode.findPath("no_dataset");
 
                                 if ((datasetNode != null) && (!datasetNode.isMissingNode()) &&
-                                    (noDatasetNode != null) && (!noDatasetNode.isMissingNode()) ) {
+                                        (noDatasetNode != null) && (!noDatasetNode.isMissingNode())) {
                                     double probDataset = datasetNode.asDouble();
                                     double probNoDataset = noDatasetNode.asDouble();
 
@@ -805,24 +812,24 @@ public class DataseerClassifier {
                                                 sentenceElement.setAttribute("reuse", "false");
                                             }*/
 
-                                            sentenceElement.setAttribute("corresp","#dataInstance-"+dataSetId);
+                                            sentenceElement.setAttribute("corresp", "#dataInstance-" + dataSetId);
 
                                             // update dataset information  maps
-                                            datasetMap.put("dataset-"+dataSetId, Pair.of(bestDataTypeWithProb.getLeft(), null));
-                                            dataInstanceMap.put("dataInstance-"+dataSetId, "dataset-"+dataSetId);
-                                            dataInstanceScoreMap.put("dataInstance-"+dataSetId, bestDataTypeWithProb.getRight());
-                                            dataInstanceReuseMap.put("dataInstance-"+dataSetId, Boolean.valueOf(isReuse));
+                                            datasetMap.put("dataset-" + dataSetId, Pair.of(bestDataTypeWithProb.getLeft(), null));
+                                            dataInstanceMap.put("dataInstance-" + dataSetId, "dataset-" + dataSetId);
+                                            dataInstanceScoreMap.put("dataInstance-" + dataSetId, bestDataTypeWithProb.getRight());
+                                            dataInstanceReuseMap.put("dataInstance-" + dataSetId, Boolean.valueOf(isReuse));
                                             dataSetId++;
 
                                             // we also need to add a dataseer subtype attribute to the parent <div>
                                             Node currentNode = sentenceElement;
-                                            while(currentNode != null) {
+                                            while (currentNode != null) {
                                                 currentNode = currentNode.getParentNode();
-                                                if (currentNode != null && 
-                                                    currentNode instanceof Element &&
-                                                    !(currentNode.getParentNode() instanceof Document) && 
-                                                    ((Element)currentNode).getTagName().equals("div")) {
-                                                    ((Element)currentNode).setAttribute("subtype", "dataseer");
+                                                if (currentNode != null &&
+                                                        currentNode instanceof Element &&
+                                                        !(currentNode.getParentNode() instanceof Document) &&
+                                                        ((Element) currentNode).getTagName().equals("div")) {
+                                                    ((Element) currentNode).setAttribute("subtype", "dataseer");
                                                     currentNode = null;
                                                 }
 
@@ -865,11 +872,11 @@ public class DataseerClassifier {
             Element listElement = doc.createElementNS("http://www.tei-c.org/ns/1.0", "list");
             listElement.setAttribute("type", "dataset");
 
-            for (Map.Entry<String, Pair<String,String>> entry : datasetMap.entrySet()) {
+            for (Map.Entry<String, Pair<String, String>> entry : datasetMap.entrySet()) {
                 Element datasetNode = doc.createElementNS("http://www.tei-c.org/ns/1.0", "dataset");
                 datasetNode.setAttribute("xml:id", entry.getKey());
 
-                Pair<String,String> theDataTypes = entry.getValue();
+                Pair<String, String> theDataTypes = entry.getValue();
 
                 if (theDataTypes.getLeft() != null) {
                     datasetNode.setAttribute("type", theDataTypes.getLeft());
@@ -892,9 +899,9 @@ public class DataseerClassifier {
 
             for (Map.Entry<String, String> entry : dataInstanceMap.entrySet()) {
                 Element dataInstanceNode = doc.createElementNS("http://www.tei-c.org/ns/1.0", "dataInstance");
-                
+
                 dataInstanceNode.setAttribute("xml:id", entry.getKey());
-                dataInstanceNode.setAttribute("corresp", "#"+entry.getValue());
+                dataInstanceNode.setAttribute("corresp", "#" + entry.getValue());
 
                 Boolean reuse = dataInstanceReuseMap.get(entry.getKey());
                 if (reuse != null) {
@@ -914,8 +921,8 @@ public class DataseerClassifier {
     }
 
     private static Element getFirstDirectChild(Element parent, String name) {
-        for(Node child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
-            if (child instanceof Element && name.equals(child.getNodeName())) 
+        for (Node child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof Element && name.equals(child.getNodeName()))
                 return (Element) child;
         }
         return null;
@@ -924,15 +931,15 @@ public class DataseerClassifier {
     private static String getUpperHeaderSection(Element element) {
         String header = null;
         Node currentNode = element;
-        while(currentNode != null) {
+        while (currentNode != null) {
             currentNode = currentNode.getParentNode();
-            if (currentNode != null && 
-                currentNode instanceof Element &&
-                !(currentNode.getParentNode() instanceof Document) && 
-                ((Element)currentNode).getTagName().equals("div")) {
-                Element headElement = getFirstDirectChild((Element)currentNode, "head");
+            if (currentNode != null &&
+                    currentNode instanceof Element &&
+                    !(currentNode.getParentNode() instanceof Document) &&
+                    ((Element) currentNode).getTagName().equals("div")) {
+                Element headElement = getFirstDirectChild((Element) currentNode, "head");
                 if (headElement != null) {
-                    header = headElement.getTextContent();   
+                    header = headElement.getTextContent();
                     currentNode = null;
                 }
             }
@@ -944,15 +951,14 @@ public class DataseerClassifier {
     }
 
     public static String serialize(org.w3c.dom.Document doc, Node node) {
-        DOMSource domSource = null;
-        String xml = null;
-        try {
-            if (node == null) {
-                domSource = new DOMSource(doc);
-            } else {
-                domSource = new DOMSource(node);
-            }
-            StringWriter writer = new StringWriter();
+        DOMSource domSource;
+        if (node == null) {
+            domSource = new DOMSource(doc);
+        } else {
+            domSource = new DOMSource(node);
+        }
+
+        try (StringWriter writer = new StringWriter()) {
             StreamResult result = new StreamResult(writer);
             TransformerFactory tf = TransformerFactory.newInstance();
             Transformer transformer = tf.newTransformer();
@@ -962,25 +968,25 @@ public class DataseerClassifier {
             if (node != null)
                 transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             transformer.transform(domSource, result);
-            xml = writer.toString();
-        } catch(TransformerException ex) {
+            return writer.toString();
+        } catch (TransformerException | IOException ex) {
             ex.printStackTrace();
+            return null;
         }
-        return xml;
     }
 
-    public String serializeLs(org.w3c.dom.Document doc)    {
+    public String serializeLs(org.w3c.dom.Document doc) {
         DOMImplementationLS domImplementation = (DOMImplementationLS) doc.getImplementation();
         LSSerializer lsSerializer = domImplementation.createLSSerializer();
-        return lsSerializer.writeToString(doc);   
+        return lsSerializer.writeToString(doc);
     }
 
     private Pair<String, Double> getBestDataType(JsonNode classificationsNode) {
-        Iterator<Map.Entry<String,JsonNode>> ite = classificationsNode.fields();
+        Iterator<Map.Entry<String, JsonNode>> ite = classificationsNode.fields();
         String bestDataType = null;
         double bestProb = 0.0;
         while (ite.hasNext()) {
-            Map.Entry<String, JsonNode> entry = ite.next(); 
+            Map.Entry<String, JsonNode> entry = ite.next();
             String className = entry.getKey();
             if (className.equals("has_dataset") || className.equals("no_dataset") || className.equals("reuse"))
                 continue;
@@ -998,9 +1004,9 @@ public class DataseerClassifier {
 
     private boolean getReuseInfo(JsonNode classificationsNode) {
         boolean isReused = false;
-        Iterator<Map.Entry<String,JsonNode>> ite = classificationsNode.fields();
+        Iterator<Map.Entry<String, JsonNode>> ite = classificationsNode.fields();
         while (ite.hasNext()) {
-            Map.Entry<String, JsonNode> entry = ite.next(); 
+            Map.Entry<String, JsonNode> entry = ite.next();
             String className = entry.getKey();
             if (className.equals("reuse")) {
                 JsonNode valNode = entry.getValue();
@@ -1013,7 +1019,7 @@ public class DataseerClassifier {
 
 
     /**
-     *  XML is always full of bad surprises. The following document:
+     * XML is always full of bad surprises. The following document:
      * <?xml version="1.0" encoding="UTF-8"?>
      * <a>
      * <p>
@@ -1021,8 +1027,8 @@ public class DataseerClassifier {
      * </p>
      * </a>
      * results in [Fatal Error] :1:94: Element type "ref" must be followed by either attribute specifications, ">" or "/>".
-     * or [Fatal Error] :1:70: The element type "c" must be terminated by the matching end-tag "</c>". 
-     * It appears that removing the dots in the attribute value avoid the parsing error (it doesn't make sense of course, 
+     * or [Fatal Error] :1:70: The element type "c" must be terminated by the matching end-tag "</c>".
+     * It appears that removing the dots in the attribute value avoid the parsing error (it doesn't make sense of course,
      * but ok...).
      * So we temporary replace the dot in the attribute values of <ref> by dummy &#x02ADB;, and restore them afterwards.
      */
@@ -1030,7 +1036,7 @@ public class DataseerClassifier {
         //System.out.println(xml);
         String newXml = xml.replaceAll("(<ref .*)\\.(.*>)", "$1&#x02ADB;$2");
         newXml = newXml.replaceAll("(<formula .*)\\.(.*>)", "$1&#x02ADB;$2");
-        while(!newXml.equals(xml)) {
+        while (!newXml.equals(xml)) {
             xml = newXml;
             newXml = xml.replaceAll("(<ref .*)\\.(.*>)", "$1&#x02ADB;$2");
             newXml = newXml.replaceAll("(<formula .*)\\.(.*>)", "$1&#x02ADB;$2");
@@ -1047,6 +1053,7 @@ public class DataseerClassifier {
 
     /**
      * Convert a PDF into TEI and enrich the TEI document with Dataseer information
+     *
      * @return enriched TEI string
      */
     public String processPDF(String filePath) throws Exception {
@@ -1057,11 +1064,11 @@ public class DataseerClassifier {
         coordinates.add("head");
         // TBD: review arguments, no need for images, annotations, outline
         GrobidAnalysisConfig config = new GrobidAnalysisConfig.GrobidAnalysisConfigBuilder()
-            .consolidateHeader(1)
-            .consolidateCitations(0)
-            .withSentenceSegmentation(true)
-            .generateTeiCoordinates(coordinates)
-            .build();
+                .consolidateHeader(1)
+                .consolidateCitations(0)
+                .withSentenceSegmentation(true)
+                .generateTeiCoordinates(coordinates)
+                .build();
         String tei = engine.fullTextToTEI(new File(filePath), config);
         return processTEIString(tei, false);
     }

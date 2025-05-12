@@ -1,84 +1,88 @@
 package org.grobid.service.controller;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-
-import org.apache.commons.lang3.StringUtils;
-import org.grobid.core.engines.DataseerClassifier;
-import org.grobid.core.engines.DatasetParser;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.grobid.core.data.Dataset;
 import org.grobid.core.data.Dataset.DatasetType;
+import org.grobid.core.engines.DataseerClassifier;
+import org.grobid.core.engines.DatasetParser;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
 import java.io.IOException;
 import java.util.*;
 
-import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.node.*;
-import com.fasterxml.jackson.core.io.*;
+import static org.grobid.service.controller.DatastetServiceUtils.isResultOK;
 
 /**
- * 
  * @author Patrice
- * 
  */
 @Singleton
 public class DatastetProcessString {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DatastetProcessString.class);
 
+    private final DatastetConfiguration datastetConfiguration;
+    private final DataseerClassifier dataseerClassifier;
+    private final DatasetParser datasetParser;
+
     @Inject
-    public DatastetProcessString() {
+    public DatastetProcessString(DatastetConfiguration configuration,
+                                 DatasetParser datasetParser,
+                                 DataseerClassifier dataseerClassifier) {
+
+        this.datasetParser = datasetParser;
+        this.dataseerClassifier = dataseerClassifier;
+        this.datastetConfiguration = configuration;
     }
 
     /**
      * Determine if a provided sentence introduces a dataset and classify the type of the dataset.
-     * 
-     * @param text
-     *            raw sentence string
+     *
+     * @param text raw sentence string
      * @return a json response object containing the information related to possible dataset
      */
-    public static Response processDataseerSentence(String text) {
+    public Response processDataseerSentence(String text) {
         LOGGER.debug(methodLogIn());
         Response response = null;
-        StringBuilder retVal = new StringBuilder();
-        DataseerClassifier classifier = DataseerClassifier.getInstance();
         try {
             LOGGER.debug(">> set raw sentence text for stateless service'...");
-            
+
             text = text.replaceAll("\\n", " ").replaceAll("\\t", " ");
             long start = System.currentTimeMillis();
-            String retValString = classifier.classify(text);
+            String retValString = this.dataseerClassifier.classify(text);
             long end = System.currentTimeMillis();
 
             // TBD: update json with runtime and software/version 
 
             if (!isResultOK(retValString)) {
-                response = Response.status(Status.NO_CONTENT).build();
+                response = Response.status(Response.Status.NO_CONTENT).build();
             } else {
-                response = Response.status(Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
+                response = Response.status(Response.Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
             }
         } catch (NoSuchElementException nseExp) {
             LOGGER.error("Could not get an instance of DataseerClassifier. Sending service unavailable.");
-            response = Response.status(Status.SERVICE_UNAVAILABLE).build();
+            response = Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
         } catch (Exception e) {
             LOGGER.error("An unexpected exception occurs. ", e);
-            response = Response.status(Status.INTERNAL_SERVER_ERROR).build();
-        } 
+            response = Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+        }
         LOGGER.debug(methodLogOut());
         return response;
     }
 
-    public static Response processDataseerSentences(String sentencesAsJson) {
+    public Response processDataseerSentences(String sentencesAsJson) {
         LOGGER.debug(methodLogIn());
         Response response = null;
         StringBuilder retVal = new StringBuilder();
-        DataseerClassifier classifier = DataseerClassifier.getInstance();
         try {
             LOGGER.debug(">> set raw sentence text for stateless service'...");
 
@@ -89,10 +93,10 @@ public class DatastetProcessString {
             try {
                 jsonNodes = mapper.readTree(sentencesAsJson);
             } catch (IOException ex) {
-                throw new RuntimeException("Cannot parse input JSON. "+ Response.Status.BAD_REQUEST);
+                throw new RuntimeException("Cannot parse input JSON. " + Response.Status.BAD_REQUEST);
             }
             if (jsonNodes == null || jsonNodes.isMissingNode()) {
-                throw new RuntimeException("The request is invalid or malformed."+ Response.Status.BAD_REQUEST);
+                throw new RuntimeException("The request is invalid or malformed." + Response.Status.BAD_REQUEST);
             }
 
             List<String> texts = new ArrayList<>();
@@ -107,20 +111,20 @@ public class DatastetProcessString {
 //                    .collect(Collectors.toList());
 
             long start = System.currentTimeMillis();
-            String retValString = classifier.classify(texts);
+            String retValString = this.dataseerClassifier.classify(texts);
             long end = System.currentTimeMillis();
 
             if (!isResultOK(retValString)) {
-                response = Response.status(Status.NO_CONTENT).build();
+                response = Response.status(Response.Status.NO_CONTENT).build();
             } else {
-                response = Response.status(Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
+                response = Response.status(Response.Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
             }
         } catch (NoSuchElementException nseExp) {
             LOGGER.error("Could not get an instance of DataseerClassifier. Sending service unavailable.");
-            response = Response.status(Status.SERVICE_UNAVAILABLE).build();
+            response = Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
         } catch (Exception e) {
             LOGGER.error("An unexpected exception occurs. ", e);
-            response = Response.status(Status.INTERNAL_SERVER_ERROR).build();
+            response = Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
         }
         LOGGER.debug(methodLogOut());
         return response;
@@ -128,31 +132,28 @@ public class DatastetProcessString {
 
     /**
      * Label dataset names, implicit datasets and data acquisition devices in a sentence.
-     * 
-     * @param text 
-     *          raw sentence string
-     * @return a json response object containing the labeling information related to possible 
-     *          dataset mentions
+     *
+     * @param text raw sentence string
+     * @return a json response object containing the labeling information related to possible
+     * dataset mentions
      */
-    public static Response processDatasetSentence(String text) {
+    public Response processDatasetSentence(String text) {
         LOGGER.debug(methodLogIn());
         Response response = null;
         StringBuilder retVal = new StringBuilder();
-        DataseerClassifier classifier = DataseerClassifier.getInstance();
-        DatasetParser parser = DatasetParser.getInstance(classifier.getDatastetConfiguration());
         JsonStringEncoder encoder = JsonStringEncoder.getInstance();
         boolean disambiguate = true;
         try {
             LOGGER.debug(">> set raw sentence text for stateless service'...");
-            
+
             text = text.replaceAll("\\n", " ").replaceAll("\\t", " ");
             long start = System.currentTimeMillis();
-            List<Dataset> result = parser.processingString(text, disambiguate);
+            List<Dataset> result = this.datasetParser.processingString(text, disambiguate);
 
             // building JSON response
             StringBuilder json = new StringBuilder();
             json.append("{");
-            json.append(DatastetServiceUtils.applicationDetails(classifier.getDatastetConfiguration().getVersion()));
+            json.append(DatastetServiceUtils.applicationDetails(this.datastetConfiguration.getVersion()));
 
             byte[] encoded = encoder.quoteAsUTF8(text);
             String output = new String(encoded);
@@ -162,7 +163,7 @@ public class DatastetProcessString {
 
             ObjectMapper mapper = new ObjectMapper();
 
-            String classifierJson = classifier.classify(text);
+            String classifierJson = dataseerClassifier.classify(text);
 
             JsonNode rootNode = mapper.readTree(classifierJson);
 
@@ -171,11 +172,11 @@ public class DatastetProcessString {
             String bestType = null;
             double hasDatasetScore = 0.0;
 
-            JsonNode classificationsNode = rootNode.findPath("classifications"); 
+            JsonNode classificationsNode = rootNode.findPath("classifications");
             if ((classificationsNode != null) && (!classificationsNode.isMissingNode())) {
 
                 if (classificationsNode.isArray()) {
-                    ArrayNode classificationsArray = (ArrayNode)classificationsNode;
+                    ArrayNode classificationsArray = (ArrayNode) classificationsNode;
                     JsonNode classificationNode = classificationsArray.get(0);
 
                     Iterator<String> iterator = classificationNode.fieldNames();
@@ -184,7 +185,7 @@ public class DatastetProcessString {
                         String field = iterator.next();
 
                         if (field.equals("has_dataset")) {
-                            JsonNode hasDatasetNode = rootNode.findPath("has_dataset"); 
+                            JsonNode hasDatasetNode = rootNode.findPath("has_dataset");
                             if ((hasDatasetNode != null) && (!hasDatasetNode.isMissingNode())) {
                                 hasDatasetScore = hasDatasetNode.doubleValue();
                             }
@@ -192,7 +193,7 @@ public class DatastetProcessString {
                             scoresPerDatatypes.put(field, classificationNode.get(field).doubleValue());
                         }
                     }
-                    
+
                     for (Map.Entry<String, Double> entry : scoresPerDatatypes.entrySet()) {
                         if (entry.getValue() > bestScore) {
                             bestScore = entry.getValue();
@@ -203,10 +204,10 @@ public class DatastetProcessString {
             }
 
             boolean startList = true;
-            for(Dataset dataset : result) {
+            for (Dataset dataset : result) {
                 if (startList)
                     startList = false;
-                else 
+                else
                     json.append(", ");
 
                 if (dataset.getType() == DatasetType.DATASET && (bestType != null) && dataset.getDataset() != null) {
@@ -220,8 +221,8 @@ public class DatastetProcessString {
             json.append("]");
 
             long end = System.currentTimeMillis();
-            float runtime = ((float)(end-start)/1000);
-            json.append(", \"runtime\": "+ runtime);
+            float runtime = ((float) (end - start) / 1000);
+            json.append(", \"runtime\": " + runtime);
             json.append("}");
 
             //System.out.println(json.toString());
@@ -230,41 +231,28 @@ public class DatastetProcessString {
             String retValString = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(finalJsonObject);
 
             if (!isResultOK(retValString)) {
-                response = Response.status(Status.NO_CONTENT).build();
+                response = Response.status(Response.Status.NO_CONTENT).build();
             } else {
-                response = Response.status(Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
+                response = Response.status(Response.Status.OK).entity(retValString).type(MediaType.TEXT_PLAIN).build();
             }
         } catch (NoSuchElementException nseExp) {
             LOGGER.error("Could not get an instance of DatasetParser. Sending service unavailable.");
-            response = Response.status(Status.SERVICE_UNAVAILABLE).build();
+            response = Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
         } catch (Exception e) {
             LOGGER.error("An unexpected exception occurs. ", e);
-            response = Response.status(Status.INTERNAL_SERVER_ERROR).build();
-        } 
+            response = Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+        }
         LOGGER.debug(methodLogOut());
         return response;
     }
 
-
-    /**
-     * @return
-     */
     public static String methodLogIn() {
         return ">> " + DatastetProcessString.class.getName() + "." + Thread.currentThread().getStackTrace()[1].getMethodName();
     }
 
-    /**
-     * @return
-     */
+
     public static String methodLogOut() {
         return "<< " + DatastetProcessString.class.getName() + "." + Thread.currentThread().getStackTrace()[1].getMethodName();
-    }
-
-    /**
-     * Check whether the result is null or empty.
-     */
-    public static boolean isResultOK(String result) {
-        return StringUtils.isBlank(result) ? false : true;
     }
 
 }

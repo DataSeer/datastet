@@ -3,6 +3,8 @@ package org.grobid.core.engines;
 import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
@@ -22,7 +24,7 @@ import org.apache.http.util.EntityUtils;
 import org.grobid.core.data.Dataset;
 import org.grobid.core.data.DatasetComponent;
 import org.grobid.core.layout.LayoutToken;
-import org.grobid.core.utilities.DatastetConfiguration;
+import org.grobid.service.configuration.DatastetConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,11 +37,12 @@ import java.util.*;
 /**
  * Dataset entity disambiguator. Once dataset mentions are recognized and grouped
  * into an entity (dataset name with recognized attributes), we use entity-fishing
- * service to disambiguate the dataset against Wikidata, as well as the attribute 
+ * service to disambiguate the dataset against Wikidata, as well as the attribute
  * values (currently only creator). The main goal is to filter out false positives.
  *
  * @author Patrice
  */
+@Singleton
 public class DatasetDisambiguator {
     private static final Logger LOGGER = LoggerFactory.getLogger(DatasetDisambiguator.class);
 
@@ -52,18 +55,16 @@ public class DatasetDisambiguator {
 
     public static DatasetDisambiguator getInstance(DatastetConfiguration configuration) {
         if (instance == null) {
-            getNewInstance(configuration);
+            synchronized (DatasetDisambiguator.class) {
+                if (instance == null) {
+                    instance = new DatasetDisambiguator(configuration);
+                }
+            }
         }
         return instance;
     }
 
-    /**
-     * Create a new instance.
-     */
-    private static synchronized void getNewInstance(DatastetConfiguration configuration) {
-        instance = new DatasetDisambiguator(configuration);
-    }
-
+    @Inject
     private DatasetDisambiguator(DatastetConfiguration configuration) {
         try {
             nerd_host = configuration.getEntityFishingHost();
@@ -71,7 +72,7 @@ public class DatasetDisambiguator {
             serverStatus = checkIfAlive();
             if (serverStatus)
                 ensureCustomizationReady();
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.error("Cannot read properties for disambiguation service", e);
         }
     }
@@ -122,7 +123,7 @@ public class DatasetDisambiguator {
             LOGGER.error("Disambiguation service not available: MalformedURLException");
         } catch (HttpHostConnectException e) {
             LOGGER.error("Cannot connect to the disambiguation service");
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.error("Disambiguation service not available: generic error", e);
         }
 
@@ -130,14 +131,14 @@ public class DatasetDisambiguator {
     }
 
     /**
-     * Check if the dataset customisation is ready on the entity-fishing server, if not load it 
+     * Check if the dataset customisation is ready on the entity-fishing server, if not load it
      */
     public void ensureCustomizationReady() {
         boolean result = false;
         URL url = null;
         CloseableHttpResponse response = null;
         try {
-            if ( (nerd_port != null) && (nerd_port.length() > 0) )
+            if ((nerd_port != null) && (nerd_port.length() > 0))
                 if (nerd_port.equals("443"))
                     url = new URL("https://" + nerd_host + "/service/customisation/dataset");
                 else
@@ -169,18 +170,18 @@ public class DatasetDisambiguator {
             LOGGER.error("disambiguation service not available: MalformedURLException");
         } catch (HttpHostConnectException e) {
             LOGGER.error("cannot connect to the disambiguation service");
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.error("disambiguation service not available", e);
         }
 
         if (!result && url != null) {
             LOGGER.info("Dataset customisation not present on server, loading it...");
             try {
-                if ( (nerd_port != null) && (nerd_port.length() > 0) )
+                if ((nerd_port != null) && (nerd_port.length() > 0))
                     if (nerd_port.equals("443"))
                         url = new URL("https://" + nerd_host + "/service/customisations");
                     else
-                       url = new URL("http://" + nerd_host + ":" + nerd_port + "/service/customisations");
+                        url = new URL("http://" + nerd_host + ":" + nerd_port + "/service/customisations");
                 else
                     url = new URL("http://" + nerd_host + "/service/customisations");
 
@@ -228,19 +229,19 @@ public class DatasetDisambiguator {
     }
 
     /**
-     * Disambiguate against Wikidata a list of raw entities extracted from text 
-     * represented as a list of tokens. The tokens will be used as disambiguisation 
-     * context, as well the other local raw datasets. 
-     * 
+     * Disambiguate against Wikidata a list of raw entities extracted from text
+     * represented as a list of tokens. The tokens will be used as disambiguisation
+     * context, as well the other local raw datasets.
+     *
      * @return list of disambiguated dataset entities
      */
     public List<Dataset> disambiguate(List<Dataset> entities, List<LayoutToken> tokens) {
-        if ( (entities == null) || (entities.size() == 0) ) 
+        if ((entities == null) || (entities.size() == 0))
             return entities;
         String json = null;
         try {
             json = runNerd(entities, tokens, "en");
-        } catch(RuntimeException e) {
+        } catch (RuntimeException e) {
             LOGGER.error("Call to entity-fishing failed.", e);
         }
         if (json == null)
@@ -250,13 +251,13 @@ public class DatasetDisambiguator {
 
 //System.out.println(json);
         int segmentStartOffset = 0;
-        if (tokens != null && tokens.size()>0)
+        if (tokens != null && tokens.size() > 0)
             segmentStartOffset = tokens.get(0).getOffset();
 
         // build a map for the existing entities in order to catch them easily
         // based on their positions
         Map<Integer, DatasetComponent> entityPositions = new TreeMap<Integer, DatasetComponent>();
-        for(Dataset entity : entities) {
+        for (Dataset entity : entities) {
             DatasetComponent datasetName = entity.getDatasetName();
             DatasetComponent dataset = entity.getDataset();
             DatasetComponent dataDevice = entity.getDataDevice();
@@ -285,7 +286,7 @@ public class DatasetDisambiguator {
                     lang = langNode.textValue();
                 }
             }
-            
+
             JsonNode entitiesNode = root.findPath("entities");
             if ((entitiesNode != null) && (!entitiesNode.isMissingNode())) {
                 // we have an array of entity
@@ -319,17 +320,17 @@ public class DatasetDisambiguator {
                     }
 
                     // domains, e.g. "domains" : [ "Biology", "Engineering" ]
-                    
+
                     // statements
-                    Map<String, List<String>> statements = new TreeMap<String,List<String>>();
+                    Map<String, List<String>> statements = new TreeMap<String, List<String>>();
                     JsonNode statementsNode = entityNode.findPath("statements");
                     if ((statementsNode != null) && (!statementsNode.isMissingNode())) {
                         if (statementsNode.isArray()) {
                             for (JsonNode statement : statementsNode) {
                                 JsonNode propertyIdNode = statement.findPath("propertyId");
                                 JsonNode valueNode = statement.findPath("value");
-                                if ( (propertyIdNode != null) && (!propertyIdNode.isMissingNode()) &&
-                                     (valueNode != null) && (!valueNode.isMissingNode()) ) {
+                                if ((propertyIdNode != null) && (!propertyIdNode.isMissingNode()) &&
+                                        (valueNode != null) && (!valueNode.isMissingNode())) {
                                     List<String> localValues = statements.get(propertyIdNode.textValue());
                                     if (localValues == null)
                                         localValues = new ArrayList<String>();
@@ -375,21 +376,21 @@ public class DatasetDisambiguator {
                     // occurence of any of these properties in the statements mean a dataset (to be refined)
                     // P5874: re3data repository ID, P5195: Wikidata Dataset Imports page, P2666: Datahub page,
                     // P6526: data.gouv.fr dataset ID, P2702: dataset distribution
-                    if ( toBeFiltered && (statements != null) && (statements.get("P5874)") != null || statements.get("P5195") != null
-                        || statements.get("P2666") != null || statements.get("P6526") != null || statements.get("P2702") != null) ) {
+                    if (toBeFiltered && (statements != null) && (statements.get("P5874)") != null || statements.get("P5195") != null
+                            || statements.get("P2666") != null || statements.get("P6526") != null || statements.get("P2702") != null)) {
                         toBeFiltered = false;
                     }
-                    
+
                     // completely hacky for the moment and to be reviewed
-                    if ( toBeFiltered && (statements != null) && (statements.get("P856") != null) ) {
+                    if (toBeFiltered && (statements != null) && (statements.get("P856") != null)) {
                         List<String> p856 = statements.get("P856");
-                        for(String p856Value : p856) {
+                        for (String p856Value : p856) {
                             // these are official web page values, we allow main data sharing sites as possible dataset web page
                             // keyterms (.edu, .org ?)
-                            if (p856Value.indexOf("datacite") != -1 || p856Value.indexOf("zenodo") != -1 || p856Value.indexOf("dryad") != -1 || 
-                                p856Value.indexOf("figshare") != -1 || p856Value.indexOf("pangaea") != -1 || 
-                                p856Value.indexOf("osf") != -1 || p856Value.indexOf(" kaggle") != -1 ||
-                                p856Value.indexOf("Mendeley") != -1 || p856Value.indexOf("github") != -1) {
+                            if (p856Value.indexOf("datacite") != -1 || p856Value.indexOf("zenodo") != -1 || p856Value.indexOf("dryad") != -1 ||
+                                    p856Value.indexOf("figshare") != -1 || p856Value.indexOf("pangaea") != -1 ||
+                                    p856Value.indexOf("osf") != -1 || p856Value.indexOf(" kaggle") != -1 ||
+                                    p856Value.indexOf("Mendeley") != -1 || p856Value.indexOf("github") != -1) {
                                 toBeFiltered = false;
                                 break;
                             }
@@ -401,12 +402,12 @@ public class DatasetDisambiguator {
                     // statement value: P486 (MeSH descriptor ID) = D064886
 
                     // if we have absolutely no statement, we don't filter
-                    if ( toBeFiltered && (statements == null || statements.size() == 0 || statementsNode.isMissingNode()) ) {
+                    if (toBeFiltered && (statements == null || statements.size() == 0 || statementsNode.isMissingNode())) {
                         toBeFiltered = false;
                     }
 
 //System.out.println(""+startOff + " / " + (startOff+segmentStartOffset));
-                    DatasetComponent component = entityPositions.get(startOff+segmentStartOffset);
+                    DatasetComponent component = entityPositions.get(startOff + segmentStartOffset);
                     if (component != null) {
                         // merging
                         if (wikidataId != null)
@@ -428,7 +429,7 @@ public class DatasetDisambiguator {
             }
 
             // propagate filtering status
-            for(Dataset entity : entities) {
+            for (Dataset entity : entities) {
                 DatasetComponent datasetName = entity.getDatasetName();
                 if (datasetName != null && datasetName.isFiltered()) {
                     entity.setFiltered(true);
@@ -458,7 +459,7 @@ public class DatasetDisambiguator {
 
     /**
      * Call entity fishing disambiguation service on server.
-     *
+     * <p>
      * To be Moved in a Worker !
      *
      * @return the resulting disambiguated context in JSON or null
@@ -470,7 +471,7 @@ public class DatasetDisambiguator {
         StringBuffer output = new StringBuffer();
         try {
             URL url = null;
-            if ( (nerd_port != null) && (nerd_port.length() > 0) )
+            if ((nerd_port != null) && (nerd_port.length() > 0))
                 if (nerd_port.equals("443"))
                     url = new URL("https://" + nerd_host + "/service/" + RESOURCEPATH);
                 else
@@ -493,11 +494,11 @@ public class DatasetDisambiguator {
             //buffer.append(", \"resultLanguages\":[ \"de\", \"fr\"]");
             buffer.append(", \"text\": \"");
             int startSegmentOffset = -1;
-            for(LayoutToken token : subtokens) {
+            for (LayoutToken token : subtokens) {
                 String tokenText = token.getText();
                 if (startSegmentOffset == -1)
                     startSegmentOffset = token.getOffset();
-                if (tokenText.equals("\n")) 
+                if (tokenText.equals("\n"))
                     tokenText = " ";
                 byte[] encodedText = encoder.quoteAsUTF8(tokenText);
                 String outputEncodedText = new String(encodedText);
@@ -512,7 +513,7 @@ public class DatasetDisambiguator {
             buffer.append(", \"entities\": [");
             boolean first = true;
             List<DatasetComponent> components = new ArrayList<>();
-            for(Dataset entity : entities) {
+            for (Dataset entity : entities) {
                 // get the dataset components interesting to disambiguate
                 DatasetComponent datasetName = entity.getDatasetName();
                 DatasetComponent dataset = entity.getDataset();
@@ -526,18 +527,18 @@ public class DatasetDisambiguator {
                     components.add(dataDevice);
             }
 
-            for(DatasetComponent component: components) {
+            for (DatasetComponent component : components) {
                 if (first) {
                     first = false;
                 } else {
                     buffer.append(", ");
                 }
 
-                byte[] encodedText = encoder.quoteAsUTF8(component.getRawForm() );
+                byte[] encodedText = encoder.quoteAsUTF8(component.getRawForm());
                 String outputEncodedText = new String(encodedText);
 
-                buffer.append("{\"rawName\": \"" + outputEncodedText + "\", \"offsetStart\": " + (component.getOffsetStart() - startSegmentOffset)+ 
-                    ", \"offsetEnd\": " + (component.getOffsetEnd() - startSegmentOffset));
+                buffer.append("{\"rawName\": \"" + outputEncodedText + "\", \"offsetStart\": " + (component.getOffsetStart() - startSegmentOffset) +
+                        ", \"offsetEnd\": " + (component.getOffsetEnd() - startSegmentOffset));
                 //buffer.append(", \"type\": \"");
                 buffer.append(" }");
             }

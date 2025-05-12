@@ -1,23 +1,18 @@
-package org.grobid.trainer;
+package org.grobid.core.data.annotation;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.util.*;
-import java.io.IOException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 
- * POJO for annotated document, filled by parsing original dataseer dataset, with JSON serialization. 
+ * POJO for an annotated document, filled by parsing original dataseer dataset, with JSON serialization.
  *
  * @author Patrice
  */
@@ -34,16 +29,16 @@ public class AnnotatedDocument {
     // TODO move that to an enumerated type for safety
     private String articleSet = null;
 
-    /** 
+    /**
      * This is a representation of the dataseer annotation, capturing the particular data scheme of the dataset.
      * Note that the annotations are not necessary located/aligned with the PDF content: for this the whole PDF
-     * fulltext parsing and mention/centext alignment need to be run.  
+     * fulltext parsing and mention/centext alignment need to be run.
      **/
     private List<DataseerAnnotation> annotations = null;
 
-    /** 
-     * Representation of inline text annotations for the complete document, aligned with PDF content and 
-     * derived from the dataseer annotations. To be used for mixed content XML training data generation. 
+    /**
+     * Representation of inline text annotations for the complete document, aligned with PDF content and
+     * derived from the dataseer annotations. To be used for mixed content XML training data generation.
      */
     private List<Annotation> inlineAnnotations = null;
 

@@ -1,15 +1,13 @@
 package org.grobid.trainer;
 
-import org.grobid.core.main.GrobidHomeFinder;
-import org.grobid.core.utilities.DatastetConfiguration;
-import org.grobid.core.utilities.GrobidProperties;
 import org.grobid.core.engines.DataseerClassifier;
+import org.grobid.core.main.GrobidHomeFinder;
+import org.grobid.core.utilities.GrobidProperties;
+import org.grobid.service.configuration.DatastetServiceConfiguration;
 
 import java.util.Arrays;
-import java.io.File;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import static org.grobid.trainer.AnnotatedCorpusGeneratorCSV.readConfiguration;
 
 /**
  * Training application for training a target model.
@@ -44,7 +42,7 @@ public class DataseerTrainerRunner {
         try {
             if (grobidHome == null)
                 grobidHome = "../grobid-home/";
-            
+
             GrobidHomeFinder grobidHomeFinder = new GrobidHomeFinder(Arrays.asList(grobidHome));
             grobidHomeFinder.findGrobidHomeOrFail();
             GrobidProperties.getInstance(grobidHomeFinder);
@@ -73,15 +71,13 @@ public class DataseerTrainerRunner {
             throw new IllegalStateException(USAGE);
         }
 
-        DatastetConfiguration datastetConfiguration = null;
-        try {
-            ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-            datastetConfiguration = mapper.readValue(new File("resources/config/config.yml"), DatastetConfiguration.class);
-        } catch(Exception e) {
-            System.err.println("The config file does not appear valid, see resources/config/config.yml");
+        DatastetServiceConfiguration serviceConfiguration = readConfiguration("resources/config/config.yml");
+
+        if (serviceConfiguration == null) {
+            throw new IllegalStateException("Dataseer configuration file not found or not valid.");
         }
 
-        String path2GbdHome = datastetConfiguration.getGrobidHome();
+        String path2GbdHome = serviceConfiguration.getGrobidHome();
         String grobidHome = args[2];
         if (grobidHome != null) {
             path2GbdHome = grobidHome;
@@ -89,7 +85,7 @@ public class DataseerTrainerRunner {
         System.out.println("path2GbdHome=" + path2GbdHome);
         initProcess(path2GbdHome);
 
-        DataseerClassifier classifier = DataseerClassifier.getInstance();
+        DataseerClassifier classifier = DataseerClassifier.getInstance(serviceConfiguration.getDatastetConfiguration());
 
         Double split = 0.0;
         boolean breakParams = false;
@@ -139,7 +135,7 @@ public class DataseerTrainerRunner {
             throw new IllegalStateException(USAGE);
         }
 
-        DataseerTrainer trainer = new DataseerTrainer();
+        DataseerTrainer trainer = new DataseerTrainer(serviceConfiguration.getDatastetConfiguration());
 
         /*if (breakParams)
             trainer.setParams(epsilon, window, nbMaxIterations);*/
@@ -155,11 +151,11 @@ public class DataseerTrainerRunner {
                 System.out.println(AbstractTrainer.runSplitTrainingEvaluation(trainer, split));
                 break;
             case EVAL_N_FOLD:
-                if(numFolds == 0) {
+                if (numFolds == 0) {
                     throw new IllegalArgumentException("N should be > 0");
                 }
                 System.out.println(AbstractTrainer.runNFoldEvaluation(trainer, numFolds));
-                break;    
+                break;
             default:
                 throw new IllegalStateException("Invalid RunType: " + mode.name());
         }
