@@ -462,7 +462,7 @@ System.out.println(localDatasetcomponent.toJson());
                                                     String text,
                                                     List<PDFAnnotation> pdfAnnotations) {
         // positions for lexical match
-        List<OffsetPosition> urlPositions = DatasetParser.characterPositionsUrlPattern(sentenceTokens, pdfAnnotations, text);
+        List<OffsetPosition> urlPositions = Lexicon.characterPositionsUrlPatternWithPdfAnnotations(sentenceTokens, pdfAnnotations, text);
         List<OffsetPosition> existingPositions = new ArrayList<>();
         for (DatasetComponent existingComponent : existingComponents) {
             existingPositions.add(existingComponent.getOffsets());
@@ -1139,7 +1139,7 @@ System.out.println(localDatasetcomponent.toJson());
 
                 // segment into sentences
                 String localText = LayoutTokensUtil.toText(layoutTokens);
-                List<OffsetPosition> urlPositions = DatasetParser.characterPositionsUrlPattern(layoutTokens, pdfAnnotations, localText);
+                List<OffsetPosition> urlPositions = Lexicon.characterPositionsUrlPatternWithPdfAnnotations(layoutTokens, pdfAnnotations, localText);
                 List<OffsetPosition> sentencePositions =
                         SentenceUtilities.getInstance().runSentenceDetection(localText, urlPositions, layoutTokens, null);
                 if (sentencePositions == null) {
@@ -2783,101 +2783,6 @@ for(String sentence : allSentences) {
                 return true;
         }
         return false;
-    }
-
-    public static List<OffsetPosition> characterPositionsUrlPattern(List<LayoutToken> layoutTokens, List<PDFAnnotation> pdfAnnotations, String text) {
-        List<OffsetPosition> urlPositions = Lexicon.getInstance().characterPositionsUrlPattern(layoutTokens);
-        List<OffsetPosition> resultPositions = new ArrayList<>();
-
-        // do we need to extend the url position based on additional position of the corresponding 
-        // PDF annotation?
-        for (OffsetPosition urlPosition : urlPositions) {
-
-            int startPos = urlPosition.start;
-            int endPos = urlPosition.end;
-
-            int startTokenIndex = -1;
-            int endTokensIndex = -1;
-
-            // token sublist 
-            List<LayoutToken> urlTokens = new ArrayList<>();
-            int tokenPos = 0;
-            int tokenIndex = 0;
-            for (LayoutToken localToken : layoutTokens) {
-                if (startPos <= tokenPos && (tokenPos + localToken.getText().length() <= endPos)) {
-                    urlTokens.add(localToken);
-                    if (startTokenIndex == -1)
-                        startTokenIndex = tokenIndex;
-                    if (tokenIndex > endTokensIndex)
-                        endTokensIndex = tokenIndex;
-                }
-                if (tokenPos > endPos) {
-                    break;
-                }
-                tokenPos += localToken.getText().length();
-                tokenIndex++;
-            }
-
-            //String urlString = LayoutTokensUtil.toText(urlTokens);
-            String urlString = text.substring(startPos, endPos);
-
-            PDFAnnotation targetAnnotation = null;
-            if (urlTokens.size() > 0) {
-                LayoutToken lastToken = urlTokens.get(urlTokens.size() - 1);
-                if (pdfAnnotations != null) {
-                    for (PDFAnnotation pdfAnnotation : pdfAnnotations) {
-                        if (pdfAnnotation.getType() != null && pdfAnnotation.getType() == Type.URI) {
-                            if (pdfAnnotation.cover(lastToken)) {
-                                //System.out.println("found overlapping PDF annotation for URL: " + pdfAnnotation.getDestination());
-                                targetAnnotation = pdfAnnotation;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (targetAnnotation != null) {
-                String destination = targetAnnotation.getDestination();
-
-                int destinationPos = 0;
-                if (destination.indexOf(urlString) != -1) {
-                    destinationPos = destination.indexOf(urlString) + urlString.length();
-                }
-
-                if (endTokensIndex < layoutTokens.size() - 1) {
-                    for (int j = endTokensIndex + 1; j < layoutTokens.size(); j++) {
-                        LayoutToken nextToken = layoutTokens.get(j);
-
-                        if ("\n".equals(nextToken.getText()) ||
-                                " ".equals(nextToken.getText()) ||
-                                nextToken.getText().length() == 0) {
-                            endPos += nextToken.getText().length();
-                            urlTokens.add(nextToken);
-                            continue;
-                        }
-
-                        int pos = destination.indexOf(nextToken.getText(), destinationPos);
-                        if (pos != -1) {
-                            endPos += nextToken.getText().length();
-                            destinationPos = pos + nextToken.getText().length();
-                            urlTokens.add(nextToken);
-                        } else
-                            break;
-                    }
-                }
-            }
-
-            // finally avoid ending a URL by a dot, because it can harm the sentence segmentation
-            if (text.charAt(endPos - 1) == '.')
-                endPos = endPos - 1;
-
-            OffsetPosition position = new OffsetPosition();
-            position.start = startPos;
-            position.end = endPos;
-            resultPositions.add(position);
-        }
-        return resultPositions;
     }
 
     public List<Dataset> attachUrlComponents(List<Dataset> datasets,

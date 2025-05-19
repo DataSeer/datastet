@@ -136,10 +136,10 @@ dependencies {
     implementation group: 'org.jvnet', name: 'mimepull', version: '1.6'
 
     //Grobid
-    implementation(group: 'org.grobid', name: 'grobid-core', version: '0.8.1') {
+    implementation(group: 'org.grobid', name: 'grobid-core', version: '0.8.2') {
         exclude group: 'org.slf4j', module: "slf4j-log4j12"
     }
-    implementation(group: 'org.grobid', name: 'grobid-trainer', version: '0.8.1') {
+    implementation(group: 'org.grobid', name: 'grobid-trainer', version: '0.8.2') {
         exclude group: 'org.slf4j', module: "slf4j-log4j12"
     }
 
